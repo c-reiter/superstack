@@ -111,6 +111,8 @@ type ViewportScroll = {
 const GRAPH_PADDING = 240;
 const MIN_ZOOM = 0.8;
 const MAX_ZOOM = 3.5;
+const WHEEL_ZOOM_SENSITIVITY = 0.0012;
+const GESTURE_ZOOM_DAMPING = 0.35;
 
 function positionNodes(graph: PatientGraph) {
   const counters = {
@@ -170,6 +172,26 @@ function useElementSize<T extends HTMLElement>() {
   }, []);
 
   return { ref, size };
+}
+
+function normalizeWheelDelta(event: WheelEvent) {
+  if (event.deltaMode === WheelEvent.DOM_DELTA_LINE) {
+    return event.deltaY * 16;
+  }
+
+  if (event.deltaMode === WheelEvent.DOM_DELTA_PAGE) {
+    return event.deltaY * 120;
+  }
+
+  return event.deltaY;
+}
+
+function dampZoomFactor(rawFactor: number, damping = GESTURE_ZOOM_DAMPING) {
+  if (!Number.isFinite(rawFactor) || rawFactor <= 0) {
+    return 1;
+  }
+
+  return 1 + (rawFactor - 1) * damping;
 }
 
 export function GraphCanvas({ graph }: { graph: PatientGraph }) {
@@ -359,7 +381,12 @@ export function GraphCanvas({ graph }: { graph: PatientGraph }) {
         }
         event.stopPropagation();
 
-        const factor = Math.exp(-event.deltaY * 0.0025);
+        const delta = normalizeWheelDelta(event);
+        const factor = clamp(
+          Math.exp(-delta * WHEEL_ZOOM_SENSITIVITY),
+          0.97,
+          1.03
+        );
         setZoomAroundPoint(factor, event.clientX, event.clientY);
         return;
       }
@@ -394,7 +421,8 @@ export function GraphCanvas({ graph }: { graph: PatientGraph }) {
       event.stopPropagation();
 
       const currentScale = gestureEvent.scale ?? 1;
-      const factor = currentScale / lastGestureScale;
+      const rawFactor = currentScale / lastGestureScale;
+      const factor = clamp(dampZoomFactor(rawFactor), 0.98, 1.02);
       lastGestureScale = currentScale;
 
       setZoomAroundPoint(factor, gestureEvent.clientX, gestureEvent.clientY);
