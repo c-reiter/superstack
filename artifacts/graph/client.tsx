@@ -586,7 +586,7 @@ export function GraphCanvas({ graph }: { graph: PatientGraph }) {
 
   return (
     <div className="flex h-full min-h-0 min-w-0 max-w-full flex-col overflow-hidden overflow-x-hidden text-foreground">
-      <div className="shrink-0 border-b border-border/50 bg-background p-4">
+      <div className="shrink-0 border-b border-border/50 p-4">
         <div className="flex flex-wrap gap-2">
           {Object.entries(TYPE_LABELS).map(([type, label]) => (
             <span
@@ -599,12 +599,12 @@ export function GraphCanvas({ graph }: { graph: PatientGraph }) {
         </div>
       </div>
 
-      <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden overflow-x-hidden bg-background">
-        <div className="absolute top-3 left-4 z-10 rounded-full border border-border/60 bg-background px-3 py-1 text-[11px] text-muted-foreground">
+      <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden overflow-x-hidden">
+        <div className="absolute top-3 left-4 z-10 rounded-full border border-border/60 px-3 py-1 text-[11px] text-muted-foreground">
           Two-finger scroll to move • Pinch or ⌘/ctrl + scroll to zoom
         </div>
 
-        <div className="absolute top-3 right-4 z-10 flex items-center gap-2 rounded-full border border-border/60 bg-background p-1">
+        <div className="absolute top-3 right-4 z-10 flex items-center gap-2 rounded-full border border-border/60 p-1">
           <button
             className="rounded-full px-2.5 py-1 text-xs text-foreground transition hover:bg-muted"
             onClick={() => setZoomAroundPoint(1 / 1.2)}
