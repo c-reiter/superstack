@@ -194,6 +194,121 @@ function dedupeNodes(nodes: GraphNode[]) {
   });
 }
 
+function parseDateCandidate(rawValue: string) {
+  const value = rawValue.trim();
+  if (!value) {
+    return null;
+  }
+
+  const directTimestamp = Date.parse(value);
+  if (Number.isFinite(directTimestamp)) {
+    return directTimestamp;
+  }
+
+  const slashMatch = value.match(/\b(\d{1,2})\/(\d{1,2})\/(\d{2,4})\b/);
+  if (slashMatch) {
+    const [, month, day, year] = slashMatch;
+    const normalizedYear = year.length === 2 ? `20${year}` : year;
+    const timestamp = Date.parse(
+      `${normalizedYear}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`
+    );
+
+    if (Number.isFinite(timestamp)) {
+      return timestamp;
+    }
+  }
+
+  const dottedMatch = value.match(/\b(\d{1,2})\.(\d{1,2})\.(\d{2,4})\b/);
+  if (dottedMatch) {
+    const [, day, month, year] = dottedMatch;
+    const normalizedYear = year.length === 2 ? `20${year}` : year;
+    const timestamp = Date.parse(
+      `${normalizedYear}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`
+    );
+
+    if (Number.isFinite(timestamp)) {
+      return timestamp;
+    }
+  }
+
+  return null;
+}
+
+function extractNewestTimestamp(text: string) {
+  const matches = [
+    ...text.matchAll(/\b\d{4}-\d{2}-\d{2}\b/g),
+    ...text.matchAll(/\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/g),
+    ...text.matchAll(/\b\d{1,2}\.\d{1,2}\.\d{2,4}\b/g),
+    ...text.matchAll(
+      /\b(?:jan|january|feb|february|mar|march|apr|april|may|jun|june|jul|july|aug|august|sep|sept|september|oct|october|nov|november|dec|december)\s+\d{1,2},?\s+\d{2,4}\b/gi
+    ),
+  ];
+
+  const timestamps = matches
+    .map((match) => parseDateCandidate(match[0]))
+    .filter((timestamp): timestamp is number => timestamp !== null);
+
+  if (timestamps.length === 0) {
+    return null;
+  }
+
+  return Math.max(...timestamps);
+}
+
+function normalizeLabMarker(label: string) {
+  return normalizeForMatch(label)
+    .replace(/\([^)]*\d{1,4}[^)]*\)/g, " ")
+    .replace(/\b(?:from|on|dated|date)\b.*$/g, " ")
+    .replace(/\b\d{4}-\d{2}-\d{2}\b/g, " ")
+    .replace(/\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/g, " ")
+    .replace(/\b\d{1,2}\.\d{1,2}\.\d{2,4}\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function selectLatestLabsByMarker(labs: PatientProfile["labs"]) {
+  const bestLabByMarker = new Map<
+    string,
+    {
+      lab: PatientProfile["labs"][number];
+      timestamp: number | null;
+      index: number;
+    }
+  >();
+
+  labs.forEach((lab, index) => {
+    const marker =
+      normalizeLabMarker(lab.label) || normalizeForMatch(lab.label);
+    const timestamp = extractNewestTimestamp(
+      [lab.label, lab.value, lab.notes].filter(Boolean).join(" ")
+    );
+    const existing = bestLabByMarker.get(marker);
+
+    if (!existing) {
+      bestLabByMarker.set(marker, { lab, timestamp, index });
+      return;
+    }
+
+    const nextScore = timestamp ?? Number.NEGATIVE_INFINITY;
+    const existingScore = existing.timestamp ?? Number.NEGATIVE_INFINITY;
+
+    if (
+      nextScore > existingScore ||
+      (nextScore === existingScore && index > existing.index)
+    ) {
+      bestLabByMarker.set(marker, { lab, timestamp, index });
+    }
+  });
+
+  return [...bestLabByMarker.values()]
+    .sort((a, b) => {
+      const aScore = a.timestamp ?? Number.NEGATIVE_INFINITY;
+      const bScore = b.timestamp ?? Number.NEGATIVE_INFINITY;
+      return bScore - aScore || b.index - a.index;
+    })
+    .map(({ lab }) => lab);
+}
+
 function makeNode(
   type: GraphNodeType,
   rawLabel: string,
@@ -281,7 +396,9 @@ function buildNodes(profile: PatientProfile) {
       .filter(Boolean)
       .map((label) => makeNode("goal", label)),
     ...pick(
-      profile.labs.filter((lab) => isInterestingLab(lab, profile)),
+      selectLatestLabsByMarker(
+        profile.labs.filter((lab) => isInterestingLab(lab, profile))
+      ),
       MAX_LAB_NODES
     ).map((lab) =>
       makeNode(

@@ -173,8 +173,9 @@ Hard rules:
 - use only the supplied profile and node list
 - infer interactions generically; do not rely on hardcoded drug names, canned pairs, or disease-specific shortcuts
 - consider the full stack: medications, supplements, hormones, peptides, conditions, symptoms, labs, diagnostics, and goals
-- detect clinically important direct relationships, especially true drug-drug, drug-supplement, drug-condition, drug-symptom, lab-symptom, lab-condition, diagnostic-condition, and monitoring-relevant relationships
+- detect clinically important direct relationships, especially true drug-drug, drug-supplement, drug-condition, drug-symptom, lab-symptom, lab-condition, lab-goal, diagnostic-condition, and monitoring-relevant relationships
 - explicitly reason about pharmacodynamic and pharmacokinetic interactions across the whole stack, including additive toxicity, opposing effects, contraindications, blood pressure and heart-rate effects, QT risk, seizure-threshold effects, bleeding risk, sedation, stimulation, serotonin, dopamine, norepinephrine, cholinergic effects, endocrine effects, and meaningful lab or monitoring implications when relevant
+- if a goal or risk node exists, connect all directly relevant markers in that domain, not just one representative marker; for example cardiovascular-risk goals should connect to each clearly relevant lipid or lipoprotein marker that materially informs that risk
 - create an edge only when the relationship is clinically meaningful and direct
 - do not create cosmetic or filler edges
 - isolated nodes are correct when no direct relationship exists
