@@ -195,7 +195,9 @@ function ArtifactPanel() {
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-auto">
+      <div
+        className={`min-h-0 flex-1 ${isGraphArtifact ? "overflow-hidden" : "overflow-auto"}`}
+      >
         {isGraphArtifact && graph ? (
           <GraphCanvas graph={graph} />
         ) : artifact.kind === "openui" && openUIArtifact ? (
