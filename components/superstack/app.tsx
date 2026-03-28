@@ -167,8 +167,8 @@ function ArtifactPanel() {
       : "Structured recommendation artifact";
 
   return (
-    <aside className="fixed inset-x-0 top-14 bottom-0 z-40 flex min-w-0 flex-col border-t border-border/50 bg-sidebar shadow-2xl xl:static xl:h-dvh xl:w-[55%] xl:shrink-0 xl:border-t-0 xl:border-l xl:shadow-none">
-      <div className="flex h-14 items-center justify-between border-b border-border/50 px-5">
+    <aside className="fixed inset-x-0 top-14 bottom-0 z-40 flex min-w-0 max-w-full flex-col overflow-hidden overflow-x-hidden border-t border-border/50 bg-sidebar shadow-2xl xl:static xl:h-dvh xl:w-[55%] xl:shrink-0 xl:border-t-0 xl:border-l xl:shadow-none">
+      <div className="flex h-14 items-center justify-between border-t border-b border-border/50 px-5">
         <div>
           <div className="text-sm font-semibold tracking-tight">
             {panelTitle}
@@ -699,7 +699,7 @@ export function SuperstackApp() {
 
   return (
     <>
-      <div className="flex h-dvh w-full overflow-hidden bg-sidebar">
+      <div className="flex h-dvh w-full overflow-hidden overflow-x-hidden bg-sidebar">
         <div className="flex min-w-0 flex-1 flex-col">
           <div className="grid h-14 grid-cols-[1fr_auto_1fr] items-center bg-sidebar px-3 md:px-5">
             <div />
