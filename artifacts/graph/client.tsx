@@ -67,7 +67,7 @@ function parseGraph(content: string): PatientGraph | null {
   }
 }
 
-const VIRTUAL_WIDTH = 1000;
+const VIRTUAL_WIDTH = 1320;
 const MIN_GRAPH_HEIGHT = 560;
 const NODE_WIDTH = 160;
 const NODE_BASE_HEIGHT = 54;
@@ -104,10 +104,10 @@ const MIN_ZOOM = 0.8;
 const MAX_ZOOM = 3.5;
 const WHEEL_ZOOM_SENSITIVITY = 0.0085;
 const GESTURE_ZOOM_DAMPING = 1.9;
-const CLUSTER_COLUMN_GAP = 220;
-const CLUSTER_ROW_GAP = 84;
+const CLUSTER_COLUMN_GAP = 250;
+const CLUSTER_ROW_GAP = 60;
 const CLUSTER_NODE_GAP = 28;
-const CLUSTER_GROUP_GAP = 72;
+const CLUSTER_GROUP_GAP = 88;
 const NODE_COLLISION_MARGIN = 14;
 const ISOLATED_NODE_BUFFER = 28;
 
