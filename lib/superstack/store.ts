@@ -62,12 +62,14 @@ function isUuid(value: string) {
 function toDbMessages({
   chatId,
   messages,
+  preserveIds = true,
 }: {
   chatId: string;
   messages: ChatMessage[];
+  preserveIds?: boolean;
 }): DBMessage[] {
   return messages.map((message, index) => ({
-    id: isUuid(message.id) ? message.id : generateUUID(),
+    id: preserveIds && isUuid(message.id) ? message.id : generateUUID(),
     chatId,
     role: message.role,
     parts: message.parts,
@@ -240,6 +242,7 @@ async function ensureExamplePatientForUser(userId: string) {
             messages: toDbMessages({
               chatId: patientWithChats.intakeChatId,
               messages: examplePatient.intakeMessages,
+              preserveIds: false,
             }),
           })
         : Promise.resolve(),
@@ -249,6 +252,7 @@ async function ensureExamplePatientForUser(userId: string) {
             messages: toDbMessages({
               chatId: patientWithChats.consultChatId,
               messages: examplePatient.consultMessages,
+              preserveIds: false,
             }),
           })
         : Promise.resolve(),
@@ -294,6 +298,7 @@ async function ensureExamplePatientForUser(userId: string) {
       messages: toDbMessages({
         chatId: intakeChatId,
         messages: examplePatient.intakeMessages,
+        preserveIds: false,
       }),
     }),
     replaceMessagesByChatId({
@@ -301,6 +306,7 @@ async function ensureExamplePatientForUser(userId: string) {
       messages: toDbMessages({
         chatId: consultChatId,
         messages: examplePatient.consultMessages,
+        preserveIds: false,
       }),
     }),
   ]);
