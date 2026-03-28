@@ -62,6 +62,81 @@ function createNodeId(type: GraphNodeType, label: string) {
     .replace(/^-+|-+$/g, "")}`;
 }
 
+function compactNodeLabel(type: GraphNodeType, rawLabel: string) {
+  const normalized = normalizeText(rawLabel).replace(/\s+/g, " ");
+
+  if (!normalized) {
+    return normalized;
+  }
+
+  if (type === "diagnostic" && /whoop wearable data/i.test(normalized)) {
+    return "Whoop data";
+  }
+
+  const firstSegment = normalized
+    .split(/[:;•]| - | — | – |,|\(|\//)
+    .map((part) => normalizeText(part))
+    .find(Boolean);
+
+  const candidate = firstSegment || normalized;
+  const words = candidate.split(/\s+/).filter(Boolean);
+
+  if (words.length <= 6) {
+    return candidate;
+  }
+
+  const stopWords = new Set([
+    "a",
+    "an",
+    "and",
+    "around",
+    "by",
+    "for",
+    "from",
+    "in",
+    "of",
+    "on",
+    "per",
+    "prior",
+    "report",
+    "the",
+    "to",
+    "with",
+  ]);
+
+  const filteredWords = words.filter((word, index) => {
+    if (index === 0) {
+      return true;
+    }
+
+    return !stopWords.has(word.toLowerCase());
+  });
+
+  return filteredWords.slice(0, 6).join(" ");
+}
+
+function buildNodeSubtitle(
+  rawLabel: string,
+  subtitle?: string,
+  shortLabel?: string
+) {
+  const normalizedRawLabel = normalizeText(rawLabel);
+  const normalizedSubtitle = normalizeText(subtitle);
+  const normalizedShortLabel = normalizeText(shortLabel);
+
+  if (
+    normalizedShortLabel &&
+    normalizedRawLabel &&
+    normalizedShortLabel !== normalizedRawLabel
+  ) {
+    return normalizedSubtitle
+      ? `${normalizedRawLabel} • ${normalizedSubtitle}`
+      : normalizedRawLabel;
+  }
+
+  return normalizedSubtitle || undefined;
+}
+
 function pick<T>(items: T[], limit: number) {
   return items.slice(0, limit);
 }
@@ -118,14 +193,17 @@ function dedupeNodes(nodes: GraphNode[]) {
 
 function makeNode(
   type: GraphNodeType,
-  label: string,
+  rawLabel: string,
   subtitle?: string
 ): GraphNode {
+  const label = compactNodeLabel(type, rawLabel);
+  const resolvedSubtitle = buildNodeSubtitle(rawLabel, subtitle, label);
+
   return {
-    id: createNodeId(type, label),
+    id: createNodeId(type, [rawLabel, subtitle].filter(Boolean).join(" ")),
     label,
     type,
-    ...(subtitle ? { subtitle } : {}),
+    ...(resolvedSubtitle ? { subtitle: resolvedSubtitle } : {}),
   };
 }
 
