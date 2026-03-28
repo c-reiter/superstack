@@ -1,6 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { Artifact } from "@/components/chat/create-artifact";
 import type { PatientGraph } from "@/lib/superstack/types";
 
@@ -96,15 +103,14 @@ type ElementSize = {
   height: number;
 };
 
-type GraphPan = {
-  x: number;
-  y: number;
+type ViewportScroll = {
+  left: number;
+  top: number;
 };
 
-type GraphViewState = {
-  zoom: number;
-  pan: GraphPan;
-};
+const GRAPH_PADDING = 240;
+const MIN_ZOOM = 0.8;
+const MAX_ZOOM = 3.5;
 
 function positionNodes(graph: PatientGraph) {
   const counters = {
@@ -176,19 +182,16 @@ export function GraphCanvas({ graph }: { graph: PatientGraph }) {
     [positionedNodes]
   );
   const { ref: viewportRef, size } = useElementSize<HTMLDivElement>();
-  const [viewState, setViewState] = useState<GraphViewState>({
-    zoom: 1,
-    pan: { x: 0, y: 0 },
-  });
-  const viewStateRef = useRef<GraphViewState>({
-    zoom: 1,
-    pan: { x: 0, y: 0 },
-  });
-  const frameRef = useRef<number | null>(null);
+  const [zoom, setZoom] = useState(1);
+  const zoomRef = useRef(1);
+  const pendingScrollRef = useRef<ViewportScroll | null>(null);
+  const hasCenteredRef = useRef(false);
   const dragStateRef = useRef<{
     pointerId: number;
     x: number;
     y: number;
+    scrollLeft: number;
+    scrollTop: number;
   } | null>(null);
 
   const baseScale = useMemo(() => {
@@ -205,6 +208,7 @@ export function GraphCanvas({ graph }: { graph: PatientGraph }) {
       1
     );
   }, [height, size.height, size.width]);
+
   const graphVersion = useMemo(
     () =>
       [
@@ -216,106 +220,129 @@ export function GraphCanvas({ graph }: { graph: PatientGraph }) {
     [graph.edges, graph.nodes, graph.subtitle, graph.title]
   );
 
-  const clampPan = useCallback(
-    (pan: GraphPan, zoom: number) => {
-      const totalScale = baseScale * zoom;
-      const scaledWidth = VIRTUAL_WIDTH * totalScale;
-      const scaledHeight = height * totalScale;
-      const padding = 96;
-
-      const maxX = Math.max((scaledWidth - size.width) / 2 + padding, padding);
-      const maxY = Math.max(
-        (scaledHeight - size.height) / 2 + padding,
-        padding
-      );
-
-      return {
-        x: clamp(pan.x, -maxX, maxX),
-        y: clamp(pan.y, -maxY, maxY),
-      };
-    },
-    [baseScale, height, size.height, size.width]
+  const totalScale = baseScale * zoom;
+  const graphPixelWidth = VIRTUAL_WIDTH * totalScale;
+  const graphPixelHeight = height * totalScale;
+  const contentWidth = Math.max(
+    size.width + GRAPH_PADDING * 2,
+    graphPixelWidth + GRAPH_PADDING * 2
   );
-
-  const commitViewState = useCallback((next: GraphViewState) => {
-    viewStateRef.current = next;
-
-    if (frameRef.current !== null) {
-      return;
-    }
-
-    frameRef.current = requestAnimationFrame(() => {
-      frameRef.current = null;
-      setViewState(viewStateRef.current);
-    });
-  }, []);
-
-  const setZoomAroundPoint = useCallback(
-    (factor: number, clientX?: number, clientY?: number) => {
-      const current = viewStateRef.current;
-      const nextZoom = clamp(current.zoom * factor, 0.8, 3.5);
-
-      if (!viewportRef.current || !size.width || !size.height) {
-        commitViewState({
-          zoom: nextZoom,
-          pan: clampPan(current.pan, nextZoom),
-        });
-        return;
-      }
-
-      const rect = viewportRef.current.getBoundingClientRect();
-      const anchorX =
-        clientX === undefined
-          ? size.width / 2
-          : clientX - rect.left - size.width / 2;
-      const anchorY =
-        clientY === undefined
-          ? size.height / 2
-          : clientY - rect.top - size.height / 2;
-      const scaleRatio = nextZoom / current.zoom;
-
-      const nextPan = clampPan(
-        {
-          x: current.pan.x - (anchorX - current.pan.x) * (scaleRatio - 1),
-          y: current.pan.y - (anchorY - current.pan.y) * (scaleRatio - 1),
-        },
-        nextZoom
-      );
-
-      commitViewState({
-        zoom: nextZoom,
-        pan: nextPan,
-      });
-    },
-    [clampPan, commitViewState, size.height, size.width, viewportRef]
+  const contentHeight = Math.max(
+    size.height + GRAPH_PADDING * 2,
+    graphPixelHeight + GRAPH_PADDING * 2
   );
+  const graphLeft = (contentWidth - graphPixelWidth) / 2;
+  const graphTop = (contentHeight - graphPixelHeight) / 2;
+
+  useEffect(() => {
+    zoomRef.current = zoom;
+  }, [zoom]);
 
   useEffect(() => {
     if (!graphVersion) {
       return;
     }
 
-    commitViewState({
-      zoom: 1,
-      pan: { x: 0, y: 0 },
-    });
-  }, [commitViewState, graphVersion]);
+    zoomRef.current = 1;
+    setZoom(1);
+    hasCenteredRef.current = false;
+    pendingScrollRef.current = null;
+  }, [graphVersion]);
 
-  useEffect(() => {
-    const current = viewStateRef.current;
-    commitViewState({
-      ...current,
-      pan: clampPan(current.pan, current.zoom),
-    });
-  }, [clampPan, commitViewState]);
+  useLayoutEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport || !size.width || !size.height) {
+      return;
+    }
 
-  useEffect(() => {
-    return () => {
-      if (frameRef.current !== null) {
-        cancelAnimationFrame(frameRef.current);
+    const maxLeft = Math.max(contentWidth - size.width, 0);
+    const maxTop = Math.max(contentHeight - size.height, 0);
+
+    if (pendingScrollRef.current) {
+      viewport.scrollTo({
+        left: clamp(pendingScrollRef.current.left, 0, maxLeft),
+        top: clamp(pendingScrollRef.current.top, 0, maxTop),
+      });
+      pendingScrollRef.current = null;
+      hasCenteredRef.current = true;
+      return;
+    }
+
+    if (!hasCenteredRef.current) {
+      viewport.scrollTo({
+        left: maxLeft / 2,
+        top: maxTop / 2,
+      });
+      hasCenteredRef.current = true;
+    }
+  }, [contentHeight, contentWidth, size.height, size.width, viewportRef]);
+
+  const setZoomAroundPoint = useCallback(
+    (factor: number, clientX?: number, clientY?: number) => {
+      const viewport = viewportRef.current;
+      const currentZoom = zoomRef.current;
+      const nextZoom = clamp(currentZoom * factor, MIN_ZOOM, MAX_ZOOM);
+
+      if (
+        !viewport ||
+        !size.width ||
+        !size.height ||
+        nextZoom === currentZoom
+      ) {
+        zoomRef.current = nextZoom;
+        setZoom(nextZoom);
+        return;
       }
-    };
-  }, []);
+
+      const rect = viewport.getBoundingClientRect();
+      const localX =
+        clientX === undefined ? size.width / 2 : clientX - rect.left;
+      const localY =
+        clientY === undefined ? size.height / 2 : clientY - rect.top;
+
+      const currentTotalScale = baseScale * currentZoom;
+      const currentGraphWidth = VIRTUAL_WIDTH * currentTotalScale;
+      const currentGraphHeight = height * currentTotalScale;
+      const currentContentWidth = Math.max(
+        size.width + GRAPH_PADDING * 2,
+        currentGraphWidth + GRAPH_PADDING * 2
+      );
+      const currentContentHeight = Math.max(
+        size.height + GRAPH_PADDING * 2,
+        currentGraphHeight + GRAPH_PADDING * 2
+      );
+      const currentGraphLeft = (currentContentWidth - currentGraphWidth) / 2;
+      const currentGraphTop = (currentContentHeight - currentGraphHeight) / 2;
+
+      const graphX =
+        (viewport.scrollLeft + localX - currentGraphLeft) / currentTotalScale;
+      const graphY =
+        (viewport.scrollTop + localY - currentGraphTop) / currentTotalScale;
+
+      const nextTotalScale = baseScale * nextZoom;
+      const nextGraphWidth = VIRTUAL_WIDTH * nextTotalScale;
+      const nextGraphHeight = height * nextTotalScale;
+      const nextContentWidth = Math.max(
+        size.width + GRAPH_PADDING * 2,
+        nextGraphWidth + GRAPH_PADDING * 2
+      );
+      const nextContentHeight = Math.max(
+        size.height + GRAPH_PADDING * 2,
+        nextGraphHeight + GRAPH_PADDING * 2
+      );
+      const nextGraphLeft = (nextContentWidth - nextGraphWidth) / 2;
+      const nextGraphTop = (nextContentHeight - nextGraphHeight) / 2;
+
+      pendingScrollRef.current = {
+        left: nextGraphLeft + graphX * nextTotalScale - localX,
+        top: nextGraphTop + graphY * nextTotalScale - localY,
+      };
+
+      zoomRef.current = nextZoom;
+      setZoom(nextZoom);
+    },
+    [baseScale, height, size.height, size.width, viewportRef]
+  );
 
   useEffect(() => {
     const element = viewportRef.current;
@@ -365,8 +392,6 @@ export function GraphCanvas({ graph }: { graph: PatientGraph }) {
     };
   }, [setZoomAroundPoint, viewportRef]);
 
-  const totalScale = baseScale * viewState.zoom;
-
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden text-foreground">
       <div className="shrink-0 border-b border-border/50 bg-background p-4">
@@ -382,79 +407,9 @@ export function GraphCanvas({ graph }: { graph: PatientGraph }) {
         </div>
       </div>
 
-      <div
-        className="relative min-h-0 flex-1 overflow-hidden bg-background touch-none"
-        onPointerCancel={() => {
-          dragStateRef.current = null;
-        }}
-        onPointerDown={(event) => {
-          dragStateRef.current = {
-            pointerId: event.pointerId,
-            x: event.clientX,
-            y: event.clientY,
-          };
-          event.currentTarget.setPointerCapture(event.pointerId);
-        }}
-        onPointerMove={(event) => {
-          const dragState = dragStateRef.current;
-          if (!dragState || dragState.pointerId !== event.pointerId) {
-            return;
-          }
-
-          const deltaX = event.clientX - dragState.x;
-          const deltaY = event.clientY - dragState.y;
-
-          dragStateRef.current = {
-            pointerId: event.pointerId,
-            x: event.clientX,
-            y: event.clientY,
-          };
-
-          const current = viewStateRef.current;
-
-          commitViewState({
-            ...current,
-            pan: clampPan(
-              {
-                x: current.pan.x + deltaX,
-                y: current.pan.y + deltaY,
-              },
-              current.zoom
-            ),
-          });
-        }}
-        onPointerUp={(event) => {
-          if (dragStateRef.current?.pointerId === event.pointerId) {
-            dragStateRef.current = null;
-            event.currentTarget.releasePointerCapture(event.pointerId);
-          }
-        }}
-        onWheel={(event) => {
-          event.preventDefault();
-
-          if (event.ctrlKey || event.metaKey) {
-            const factor = Math.exp(-event.deltaY * 0.0025);
-            setZoomAroundPoint(factor, event.clientX, event.clientY);
-            return;
-          }
-
-          const current = viewStateRef.current;
-
-          commitViewState({
-            ...current,
-            pan: clampPan(
-              {
-                x: current.pan.x - event.deltaX,
-                y: current.pan.y - event.deltaY,
-              },
-              current.zoom
-            ),
-          });
-        }}
-        ref={viewportRef}
-      >
+      <div className="relative min-h-0 flex-1 overflow-hidden bg-background">
         <div className="absolute top-3 left-4 z-10 rounded-full border border-border/60 bg-background px-3 py-1 text-[11px] text-muted-foreground">
-          Scroll to pan • Pinch or ⌘/ctrl + scroll to zoom
+          Two-finger scroll to move • Pinch or ⌘/ctrl + scroll to zoom
         </div>
 
         <div className="absolute top-3 right-4 z-10 flex items-center gap-2 rounded-full border border-border/60 bg-background p-1">
@@ -477,12 +432,14 @@ export function GraphCanvas({ graph }: { graph: PatientGraph }) {
           </button>
           <button
             className="rounded-full px-2.5 py-1 text-[11px] text-muted-foreground transition hover:bg-muted hover:text-foreground"
-            onClick={() =>
-              commitViewState({
-                zoom: 1,
-                pan: { x: 0, y: 0 },
-              })
-            }
+            onClick={() => {
+              pendingScrollRef.current = {
+                left: Math.max(contentWidth - size.width, 0) / 2,
+                top: Math.max(contentHeight - size.height, 0) / 2,
+              };
+              zoomRef.current = 1;
+              setZoom(1);
+            }}
             type="button"
           >
             Reset
@@ -490,72 +447,130 @@ export function GraphCanvas({ graph }: { graph: PatientGraph }) {
         </div>
 
         <div
-          className="absolute left-1/2 top-1/2"
-          style={{ transform: "translate(-50%, -50%)" }}
+          className="no-scrollbar overscroll-behavior-contain h-full w-full cursor-grab overflow-auto active:cursor-grabbing"
+          onPointerCancel={() => {
+            dragStateRef.current = null;
+          }}
+          onPointerDown={(event) => {
+            if (!(event.target instanceof Element)) {
+              return;
+            }
+
+            if (event.target.closest("button")) {
+              return;
+            }
+
+            dragStateRef.current = {
+              pointerId: event.pointerId,
+              x: event.clientX,
+              y: event.clientY,
+              scrollLeft: event.currentTarget.scrollLeft,
+              scrollTop: event.currentTarget.scrollTop,
+            };
+            event.currentTarget.setPointerCapture(event.pointerId);
+          }}
+          onPointerMove={(event) => {
+            const dragState = dragStateRef.current;
+            if (!dragState || dragState.pointerId !== event.pointerId) {
+              return;
+            }
+
+            const deltaX = event.clientX - dragState.x;
+            const deltaY = event.clientY - dragState.y;
+
+            event.currentTarget.scrollLeft = dragState.scrollLeft - deltaX;
+            event.currentTarget.scrollTop = dragState.scrollTop - deltaY;
+          }}
+          onPointerUp={(event) => {
+            if (dragStateRef.current?.pointerId === event.pointerId) {
+              dragStateRef.current = null;
+              event.currentTarget.releasePointerCapture(event.pointerId);
+            }
+          }}
+          onWheel={(event) => {
+            if (!(event.ctrlKey || event.metaKey)) {
+              return;
+            }
+
+            event.preventDefault();
+            const factor = Math.exp(-event.deltaY * 0.0025);
+            setZoomAroundPoint(factor, event.clientX, event.clientY);
+          }}
+          ref={viewportRef}
         >
           <div
-            className="relative origin-center will-change-transform"
+            className="relative"
             style={{
-              width: VIRTUAL_WIDTH,
-              height,
-              transform: `translate(${viewState.pan.x}px, ${viewState.pan.y}px) scale(${totalScale})`,
+              width: contentWidth,
+              height: contentHeight,
             }}
           >
-            <svg
-              className="absolute inset-0 h-full w-full"
-              preserveAspectRatio="xMidYMid meet"
-              viewBox={`0 0 ${VIRTUAL_WIDTH} ${height}`}
+            <div
+              className="absolute origin-top-left"
+              style={{
+                left: graphLeft,
+                top: graphTop,
+                width: VIRTUAL_WIDTH,
+                height,
+                transform: `scale(${totalScale})`,
+              }}
             >
-              {graph.edges.map((edge) => {
-                const source = nodeMap.get(edge.source);
-                const target = nodeMap.get(edge.target);
-
-                if (!source || !target) {
-                  return null;
-                }
-
-                const midX = (source.x + target.x) / 2;
-                const curve = `M ${source.x} ${source.y} C ${(source.x + midX) / 2} ${source.y}, ${(target.x + midX) / 2} ${target.y}, ${target.x} ${target.y}`;
-
-                return (
-                  <path
-                    className={EDGE_STYLES[edge.severity]}
-                    d={curve}
-                    fill="none"
-                    key={edge.id}
-                    opacity="0.82"
-                    strokeLinecap="round"
-                    strokeWidth="2.5"
-                  >
-                    <title>{`${edge.label}: ${edge.explanation}`}</title>
-                  </path>
-                );
-              })}
-            </svg>
-
-            {positionedNodes.map((node) => (
-              <div
-                className={`absolute w-40 -translate-x-1/2 -translate-y-1/2 rounded-xl border px-3 py-2.5 ${TYPE_STYLES[node.type]}`}
-                key={node.id}
-                style={{
-                  left: `${(node.x / VIRTUAL_WIDTH) * 100}%`,
-                  top: node.y,
-                }}
-                title={node.subtitle ?? node.label}
+              <svg
+                className="absolute inset-0 h-full w-full"
+                preserveAspectRatio="xMidYMid meet"
+                viewBox={`0 0 ${VIRTUAL_WIDTH} ${height}`}
               >
-                <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-foreground/55">
-                  {TYPE_LABELS[node.type]}
-                </div>
-                <div className="mt-1 text-sm font-semibold leading-tight text-foreground">
-                  {node.label}
-                </div>
-                {node.subtitle ? (
-                  <div className="mt-1 text-xs leading-relaxed text-foreground/70 line-clamp-3">
-                    {node.subtitle}
+                {graph.edges.map((edge) => {
+                  const source = nodeMap.get(edge.source);
+                  const target = nodeMap.get(edge.target);
+
+                  if (!source || !target) {
+                    return null;
+                  }
+
+                  const midX = (source.x + target.x) / 2;
+                  const curve = `M ${source.x} ${source.y} C ${(source.x + midX) / 2} ${source.y}, ${(target.x + midX) / 2} ${target.y}, ${target.x} ${target.y}`;
+
+                  return (
+                    <path
+                      className={EDGE_STYLES[edge.severity]}
+                      d={curve}
+                      fill="none"
+                      key={edge.id}
+                      opacity="0.82"
+                      strokeLinecap="round"
+                      strokeWidth="2.5"
+                    >
+                      <title>{`${edge.label}: ${edge.explanation}`}</title>
+                    </path>
+                  );
+                })}
+              </svg>
+
+              {positionedNodes.map((node) => (
+                <div
+                  className={`absolute w-40 -translate-x-1/2 -translate-y-1/2 rounded-xl border px-3 py-2.5 ${TYPE_STYLES[node.type]}`}
+                  key={node.id}
+                  style={{
+                    left: `${(node.x / VIRTUAL_WIDTH) * 100}%`,
+                    top: node.y,
+                  }}
+                  title={node.subtitle ?? node.label}
+                >
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-foreground/55">
+                    {TYPE_LABELS[node.type]}
                   </div>
-                ) : null}
-              </div>
-            ))}
+                  <div className="mt-1 text-sm font-semibold leading-tight text-foreground">
+                    {node.label}
+                  </div>
+                  {node.subtitle ? (
+                    <div className="mt-1 text-xs leading-relaxed text-foreground/70 line-clamp-3">
+                      {node.subtitle}
+                    </div>
+                  ) : null}
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </div>
