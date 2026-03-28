@@ -1,10 +1,6 @@
 import { z } from "zod";
 import { auth } from "@/app/(auth)/auth";
-import {
-  createPatient,
-  ensureDemoPatients,
-  listPatients,
-} from "@/lib/superstack/store";
+import { createPatient, listPatients } from "@/lib/superstack/store";
 
 const createPatientSchema = z.object({
   name: z.string().optional(),
@@ -17,7 +13,6 @@ export async function GET() {
     return Response.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  await ensureDemoPatients(session.user.id);
   const patients = await listPatients(session.user.id);
   return Response.json({ patients }, { status: 200 });
 }

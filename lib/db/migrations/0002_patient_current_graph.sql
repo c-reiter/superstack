@@ -1,0 +1,2 @@
+ALTER TABLE "Patient"
+ADD COLUMN IF NOT EXISTS "currentGraph" text NOT NULL DEFAULT '{}';

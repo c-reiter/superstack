@@ -13,6 +13,9 @@ const allowedFileTypes = [
   "text/markdown",
   "text/csv",
   "application/json",
+  "text/html",
+  "application/xhtml+xml",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 ];
 
 const fileSchema = z.object({
@@ -40,6 +43,12 @@ function inferContentType(filename: string, fileType: string) {
   }
   if (lower.endsWith(".json")) {
     return "application/json";
+  }
+  if (lower.endsWith(".html") || lower.endsWith(".htm")) {
+    return "text/html";
+  }
+  if (lower.endsWith(".docx")) {
+    return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
   }
   if (lower.endsWith(".pdf")) {
     return "application/pdf";
@@ -93,7 +102,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error:
-            "File type should be PNG, JPEG, WEBP, PDF, TXT, Markdown, CSV, or JSON",
+            "File type should be PNG, JPEG, WEBP, PDF, DOCX, HTML, TXT, Markdown, CSV, or JSON",
         },
         { status: 400 }
       );

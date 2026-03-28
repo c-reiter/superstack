@@ -56,6 +56,7 @@ export type PatientRecord = {
   summary: string;
   setupComplete: boolean;
   profile: PatientProfile;
+  currentGraph: PatientGraph | null;
   intakeMessages: ChatMessage[];
   consultMessages: ChatMessage[];
   createdAt: string;
@@ -120,6 +121,7 @@ export const emptyPatientRecord = (id: string): PatientRecord => ({
   summary: "",
   setupComplete: false,
   profile: emptyPatientProfile(),
+  currentGraph: null,
   intakeMessages: [],
   consultMessages: [],
   createdAt: new Date().toISOString(),

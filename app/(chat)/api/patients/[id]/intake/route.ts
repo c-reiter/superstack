@@ -8,6 +8,7 @@ import {
 } from "ai";
 import { z } from "zod";
 import { auth } from "@/app/(auth)/auth";
+import { sanitizeMessagesForModel } from "@/lib/ai/attachments";
 import { allowedModelIds, DEFAULT_CHAT_MODEL } from "@/lib/ai/models";
 import { intakePrompt, patientProfileSchema, profileUpdatePrompt } from "@/lib/ai/superstack-prompts";
 import { getLanguageModel } from "@/lib/ai/providers";
@@ -20,77 +21,6 @@ const requestSchema = z.object({
   messages: z.array(z.any()),
   selectedModelId: z.string().optional(),
 });
-
-const inlineTextMediaTypes = new Set([
-  "text/plain",
-  "text/markdown",
-  "text/csv",
-  "application/json",
-]);
-
-async function readAttachmentText(url: string) {
-  const response = await fetch(url);
-
-  if (!response.ok) {
-    throw new Error(`Failed to read attachment: ${response.status}`);
-  }
-
-  return response.text();
-}
-
-async function sanitizeMessagesForModel(messages: ChatMessage[]) {
-  return Promise.all(
-    messages.map(async (message) => {
-      const parts = await Promise.all(
-        message.parts.map(async (part) => {
-          if (part.type !== "file") {
-            return part;
-          }
-
-          const filename =
-            ("filename" in part && part.filename) ||
-            ("name" in part && part.name) ||
-            "attachment";
-          const mediaType =
-            ("mediaType" in part && part.mediaType) || "application/octet-stream";
-
-          if (mediaType.startsWith("image/") || mediaType === "application/pdf") {
-            return part;
-          }
-
-          if (inlineTextMediaTypes.has(mediaType)) {
-            try {
-              const fileText = await readAttachmentText(part.url);
-              const truncatedText = fileText.length > 12000
-                ? `${fileText.slice(0, 12000)}\n\n[truncated]`
-                : fileText;
-
-              return {
-                type: "text" as const,
-                text: `Attached file: ${filename}\n\n${truncatedText}`,
-              };
-            } catch {
-              return {
-                type: "text" as const,
-                text: `Attached file: ${filename} (${mediaType}). The content could not be extracted, so ask the user to paste the relevant sections into chat.`,
-              };
-            }
-          }
-
-          return {
-            type: "text" as const,
-            text: `Attached file: ${filename} (${mediaType}).`,
-          };
-        })
-      );
-
-      return {
-        ...message,
-        parts,
-      };
-    })
-  );
-}
 
 function stringifyConversation(messages: ChatMessage[]) {
   return messages

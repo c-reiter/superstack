@@ -7,6 +7,7 @@ import {
 } from "ai";
 import { z } from "zod";
 import { auth } from "@/app/(auth)/auth";
+import { sanitizeMessagesForModel } from "@/lib/ai/attachments";
 import { allowedModelIds, DEFAULT_CHAT_MODEL } from "@/lib/ai/models";
 import { consultPrompt } from "@/lib/ai/superstack-prompts";
 import { getLanguageModel } from "@/lib/ai/providers";
@@ -47,7 +48,8 @@ export async function POST(
       ? body.selectedModelId
       : DEFAULT_CHAT_MODEL;
   const uiMessages = body.messages as ChatMessage[];
-  const modelMessages = await convertToModelMessages(uiMessages);
+  const sanitizedMessages = await sanitizeMessagesForModel(uiMessages);
+  const modelMessages = await convertToModelMessages(sanitizedMessages);
 
   const stream = createUIMessageStream({
     execute: async ({ writer }) => {

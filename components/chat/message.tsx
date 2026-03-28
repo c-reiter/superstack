@@ -117,7 +117,7 @@ const PurePreviewMessage = ({
       return (
         <MessageContent
           className={cn("text-[15px] leading-7", {
-            "w-fit max-w-[min(80%,56ch)] overflow-hidden break-words rounded-2xl rounded-br-lg border border-border/30 bg-gradient-to-br from-secondary to-muted px-3.5 py-2 shadow-[var(--shadow-card)]":
+            "w-fit max-w-[min(80%,56ch)] overflow-hidden break-words rounded-2xl rounded-br-lg border border-border/30 bg-secondary px-3.5 py-2 shadow-[var(--shadow-card)]":
               message.role === "user",
           })}
           data-testid="message-content"

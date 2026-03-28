@@ -1,3 +1,4 @@
+import { generateCurrentPatientGraph } from "@/lib/ai/superstack-graph";
 import type { ChatMessage } from "@/lib/types";
 import {
   createPatient as createPatientRow,
@@ -8,6 +9,7 @@ import {
 import type { Patient as DbPatient } from "@/lib/db/schema";
 import {
   emptyPatientProfile,
+  type PatientGraph,
   type PatientProfile,
   type PatientRecord,
 } from "./types";
@@ -24,6 +26,21 @@ function safeParse<T>(value: string | null | undefined, fallback: T): T {
   }
 }
 
+function safeParseGraph(value: string | null | undefined): PatientGraph | null {
+  const parsed = safeParse<PatientGraph | null>(value, null);
+
+  if (
+    parsed &&
+    typeof parsed === "object" &&
+    Array.isArray((parsed as PatientGraph).nodes) &&
+    Array.isArray((parsed as PatientGraph).edges)
+  ) {
+    return parsed as PatientGraph;
+  }
+
+  return null;
+}
+
 export function hydratePatient(patient: DbPatient): PatientRecord {
   return {
     id: patient.id,
@@ -31,6 +48,7 @@ export function hydratePatient(patient: DbPatient): PatientRecord {
     summary: patient.summary,
     setupComplete: patient.setupComplete,
     profile: safeParse<PatientProfile>(patient.profile, emptyPatientProfile()),
+    currentGraph: safeParseGraph(patient.currentGraph),
     intakeMessages: safeParse<ChatMessage[]>(patient.intakeMessages, []),
     consultMessages: safeParse<ChatMessage[]>(patient.consultMessages, []),
     createdAt: patient.createdAt.toISOString(),
@@ -55,6 +73,7 @@ export async function createPatient(userId: string, name = "New patient") {
     summary: "",
     setupComplete: false,
     profile: JSON.stringify(emptyPatientProfile()),
+    currentGraph: JSON.stringify(null),
     intakeMessages: JSON.stringify([]),
     consultMessages: JSON.stringify([]),
   });
@@ -69,6 +88,7 @@ export async function savePatientRecord({
   summary,
   setupComplete,
   profile,
+  currentGraph,
   intakeMessages,
   consultMessages,
 }: {
@@ -78,6 +98,7 @@ export async function savePatientRecord({
   summary?: string;
   setupComplete?: boolean;
   profile?: PatientProfile;
+  currentGraph?: PatientGraph | null;
   intakeMessages?: ChatMessage[];
   consultMessages?: ChatMessage[];
 }) {
@@ -89,6 +110,9 @@ export async function savePatientRecord({
       ...(summary !== undefined ? { summary } : {}),
       ...(setupComplete !== undefined ? { setupComplete } : {}),
       ...(profile !== undefined ? { profile: JSON.stringify(profile) } : {}),
+      ...(currentGraph !== undefined
+        ? { currentGraph: JSON.stringify(currentGraph) }
+        : {}),
       ...(intakeMessages !== undefined
         ? { intakeMessages: JSON.stringify(intakeMessages) }
         : {}),
@@ -209,9 +233,7 @@ const demoPatientSeeds: Array<{
         { label: "Boron", value: "15.09 µg/L — low" },
         { label: "ApoB", value: "79 mg/dL" },
       ],
-      familyHistory: [
-        "Not clearly documented in the source report",
-      ],
+      familyHistory: ["Not clearly documented in the source report"],
       lifestyle: {
         activity: "Severely insufficient cardiovascular training",
         sleep: "Measured sleep well below perceived 8 hours",
@@ -240,12 +262,19 @@ export async function ensureDemoPatients(userId: string) {
       continue;
     }
 
+    const currentGraph = await generateCurrentPatientGraph({
+      profile: seed.profile,
+      intakeMessages: [],
+      consultMessages: [],
+    });
+
     await createPatientRow({
       userId,
       name: seed.name,
       summary: seed.summary,
       setupComplete: true,
       profile: JSON.stringify(seed.profile),
+      currentGraph: JSON.stringify(currentGraph),
       intakeMessages: JSON.stringify([]),
       consultMessages: JSON.stringify([]),
     });

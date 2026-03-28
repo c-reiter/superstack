@@ -209,6 +209,9 @@ function PureMultimodalInput({
     });
 
     setAttachments([]);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
     setLocalStorageInput("");
     setInput("");
 
@@ -260,6 +263,10 @@ function PureMultimodalInput({
     async (event: ChangeEvent<HTMLInputElement>) => {
       const files = Array.from(event.target.files || []);
 
+      if (files.length === 0) {
+        return;
+      }
+
       setUploadQueue(files.map((file) => file.name));
 
       try {
@@ -277,6 +284,9 @@ function PureMultimodalInput({
         toast.error("Failed to upload files");
       } finally {
         setUploadQueue([]);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = "";
+        }
       }
     },
     [setAttachments, uploadFile]
@@ -603,10 +613,13 @@ function PureAttachmentsButton({
           : "text-muted-foreground/30 cursor-not-allowed"
       )}
       data-testid="attachments-button"
-      disabled={status !== "ready" || !hasVision}
+      disabled={status === "submitted" || !hasVision}
       onClick={(event) => {
         event.preventDefault();
-        fileInputRef.current?.click();
+        if (fileInputRef.current) {
+          fileInputRef.current.value = "";
+          fileInputRef.current.click();
+        }
       }}
       variant="ghost"
     >

@@ -144,6 +144,7 @@ export const patient = pgTable("Patient", {
   summary: text("summary").notNull().default(""),
   setupComplete: boolean("setupComplete").notNull().default(false),
   profile: text("profile").notNull().default("{}"),
+  currentGraph: text("currentGraph").notNull().default("{}"),
   intakeMessages: text("intakeMessages").notNull().default("[]"),
   consultMessages: text("consultMessages").notNull().default("[]"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),

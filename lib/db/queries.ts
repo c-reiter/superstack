@@ -671,6 +671,7 @@ export async function createPatient({
   summary,
   setupComplete,
   profile,
+  currentGraph,
   intakeMessages,
   consultMessages,
 }: {
@@ -679,6 +680,7 @@ export async function createPatient({
   summary?: string;
   setupComplete?: boolean;
   profile?: string;
+  currentGraph?: string;
   intakeMessages?: string;
   consultMessages?: string;
 }) {
@@ -691,6 +693,7 @@ export async function createPatient({
         summary: summary ?? "",
         setupComplete: setupComplete ?? false,
         profile: profile ?? "{}",
+        currentGraph: currentGraph ?? "{}",
         intakeMessages: intakeMessages ?? "[]",
         consultMessages: consultMessages ?? "[]",
         createdAt: new Date(),
@@ -711,7 +714,7 @@ export async function updatePatientById({
 }: {
   id: string;
   userId: string;
-  updates: Partial<Pick<Patient, "name" | "summary" | "setupComplete" | "profile" | "intakeMessages" | "consultMessages">>;
+  updates: Partial<Pick<Patient, "name" | "summary" | "setupComplete" | "profile" | "currentGraph" | "intakeMessages" | "consultMessages">>;
 }) {
   try {
     const [updatedPatient] = await db

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { auth } from "@/app/(auth)/auth";
+import { generateCurrentPatientGraph } from "@/lib/ai/superstack-graph";
 import { getPatientById } from "@/lib/db/queries";
 import { getHydratedPatient, savePatientRecord } from "@/lib/superstack/store";
 import { emptyPatientProfile } from "@/lib/superstack/types";
@@ -31,6 +32,32 @@ export async function GET(
   }
 
   const patient = await getHydratedPatient(id);
+
+  if (
+    patient &&
+    patient.currentGraph === null &&
+    (patient.intakeMessages.length > 0 ||
+      patient.consultMessages.length > 0 ||
+      patient.profile.diagnoses.length > 0 ||
+      patient.profile.medications.length > 0 ||
+      patient.profile.supplements.length > 0 ||
+      patient.profile.labs.length > 0 ||
+      patient.profile.symptoms.length > 0)
+  ) {
+    const currentGraph = await generateCurrentPatientGraph({
+      profile: patient.profile,
+      intakeMessages: patient.intakeMessages,
+      consultMessages: patient.consultMessages,
+    });
+
+    const updatedPatient = await savePatientRecord({
+      id,
+      userId: session.user.id,
+      currentGraph,
+    });
+
+    return Response.json({ patient: updatedPatient }, { status: 200 });
+  }
 
   return Response.json({ patient }, { status: 200 });
 }
