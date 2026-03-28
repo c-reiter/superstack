@@ -42,19 +42,14 @@ const TYPE_LABELS: Record<PatientGraph["nodes"][number]["type"], string> = {
 };
 
 const TYPE_STYLES: Record<PatientGraph["nodes"][number]["type"], string> = {
-  medication: "border-sky-500/45 bg-sky-500/32 text-sky-950 dark:text-sky-50",
-  supplement:
-    "border-emerald-500/45 bg-emerald-500/32 text-emerald-950 dark:text-emerald-50",
-  condition:
-    "border-rose-500/45 bg-rose-500/32 text-rose-950 dark:text-rose-50",
-  lab: "border-amber-500/45 bg-amber-500/32 text-amber-950 dark:text-amber-50",
-  goal: "border-violet-500/45 bg-violet-500/32 text-violet-950 dark:text-violet-50",
-  symptom:
-    "border-orange-500/45 bg-orange-500/32 text-orange-950 dark:text-orange-50",
-  recommendation:
-    "border-cyan-500/45 bg-cyan-500/32 text-cyan-950 dark:text-cyan-50",
-  diagnostic:
-    "border-yellow-500/45 bg-yellow-500/32 text-yellow-950 dark:text-yellow-50",
+  medication: "border-sky-400/60 bg-sky-950/90 text-sky-100",
+  supplement: "border-emerald-400/60 bg-emerald-950/90 text-emerald-100",
+  condition: "border-rose-400/60 bg-rose-950/90 text-rose-100",
+  lab: "border-amber-400/60 bg-amber-950/90 text-amber-100",
+  goal: "border-violet-400/60 bg-violet-950/90 text-violet-100",
+  symptom: "border-orange-400/60 bg-orange-950/90 text-orange-100",
+  recommendation: "border-cyan-400/60 bg-cyan-950/90 text-cyan-100",
+  diagnostic: "border-yellow-400/60 bg-yellow-950/90 text-yellow-100",
 };
 
 const EDGE_STYLES = {
