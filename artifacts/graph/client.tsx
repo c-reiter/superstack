@@ -352,9 +352,33 @@ export function GraphCanvas({ graph }: { graph: PatientGraph }) {
 
     let lastGestureScale = 1;
 
+    const handleWheel = (event: WheelEvent) => {
+      if (event.ctrlKey || event.metaKey) {
+        if (event.cancelable) {
+          event.preventDefault();
+        }
+        event.stopPropagation();
+
+        const factor = Math.exp(-event.deltaY * 0.0025);
+        setZoomAroundPoint(factor, event.clientX, event.clientY);
+        return;
+      }
+
+      if (event.cancelable) {
+        event.preventDefault();
+      }
+      event.stopPropagation();
+
+      element.scrollLeft += event.deltaX;
+      element.scrollTop += event.deltaY;
+    };
+
     const handleGestureStart = (event: Event) => {
       const gestureEvent = event as Event & { scale?: number };
-      event.preventDefault();
+      if (event.cancelable) {
+        event.preventDefault();
+      }
+      event.stopPropagation();
       lastGestureScale = gestureEvent.scale ?? 1;
     };
 
@@ -364,7 +388,10 @@ export function GraphCanvas({ graph }: { graph: PatientGraph }) {
         clientY?: number;
         scale?: number;
       };
-      event.preventDefault();
+      if (event.cancelable) {
+        event.preventDefault();
+      }
+      event.stopPropagation();
 
       const currentScale = gestureEvent.scale ?? 1;
       const factor = currentScale / lastGestureScale;
@@ -373,19 +400,27 @@ export function GraphCanvas({ graph }: { graph: PatientGraph }) {
       setZoomAroundPoint(factor, gestureEvent.clientX, gestureEvent.clientY);
     };
 
-    const handleGestureEnd = () => {
+    const handleGestureEnd = (event: Event) => {
+      if (event.cancelable) {
+        event.preventDefault();
+      }
+      event.stopPropagation();
       lastGestureScale = 1;
     };
 
+    element.addEventListener("wheel", handleWheel, { passive: false });
     element.addEventListener("gesturestart", handleGestureStart, {
       passive: false,
     });
     element.addEventListener("gesturechange", handleGestureChange, {
       passive: false,
     });
-    element.addEventListener("gestureend", handleGestureEnd);
+    element.addEventListener("gestureend", handleGestureEnd, {
+      passive: false,
+    });
 
     return () => {
+      element.removeEventListener("wheel", handleWheel);
       element.removeEventListener("gesturestart", handleGestureStart);
       element.removeEventListener("gesturechange", handleGestureChange);
       element.removeEventListener("gestureend", handleGestureEnd);
@@ -486,15 +521,6 @@ export function GraphCanvas({ graph }: { graph: PatientGraph }) {
               dragStateRef.current = null;
               event.currentTarget.releasePointerCapture(event.pointerId);
             }
-          }}
-          onWheel={(event) => {
-            if (!(event.ctrlKey || event.metaKey)) {
-              return;
-            }
-
-            event.preventDefault();
-            const factor = Math.exp(-event.deltaY * 0.0025);
-            setZoomAroundPoint(factor, event.clientX, event.clientY);
           }}
           ref={viewportRef}
         >
