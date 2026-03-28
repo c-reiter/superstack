@@ -108,6 +108,8 @@ const CLUSTER_COLUMN_GAP = 220;
 const CLUSTER_ROW_GAP = 84;
 const CLUSTER_NODE_GAP = 28;
 const CLUSTER_GROUP_GAP = 72;
+const NODE_COLLISION_MARGIN = 14;
+const ISOLATED_NODE_BUFFER = 28;
 
 function estimateLineCount(text: string | undefined, charsPerLine: number) {
   if (!text) {
@@ -542,6 +544,17 @@ function getNodeBounds(nodes: PositionedNode[]): NodeBounds {
   };
 }
 
+function nodesOverlapWithGap(
+  node: { x: number; y: number; height: number },
+  other: { x: number; y: number; height: number },
+  gap: number
+) {
+  const dx = Math.abs(node.x - other.x);
+  const dy = Math.abs(node.y - other.y);
+
+  return dx < NODE_WIDTH + gap && dy < (node.height + other.height) / 2 + gap;
+}
+
 function placeIsolatedNodesAroundGroups(
   isolatedNodes: PositionedNode[],
   anchorNodes: PositionedNode[]
@@ -555,40 +568,71 @@ function placeIsolatedNodesAroundGroups(
     (a, b) =>
       hashString(a.id) - hashString(b.id) || a.label.localeCompare(b.label)
   );
-  const nodesPerRing = Math.max(6, Math.min(10, sortedNodes.length));
   const minCenterX = NODE_WIDTH / 2 + 56;
   const maxCenterX = VIRTUAL_WIDTH - NODE_WIDTH / 2 - 56;
   const baseRadiusX = Math.max(bounds.width / 2 + 210, 300);
   const baseRadiusY = Math.max(bounds.height / 2 + 170, 220);
+  const occupiedNodes = [...anchorNodes];
 
-  sortedNodes.forEach((node, index) => {
-    const ring = Math.floor(index / nodesPerRing);
-    const indexInRing = index % nodesPerRing;
-    const deterministicOffset =
-      ((hashString(node.id) % 1000) / 1000 - 0.5) * 0.45;
-    const angle =
-      ((indexInRing + 0.5) / nodesPerRing) * Math.PI * 2 +
-      deterministicOffset +
-      ring * 0.28;
-    const radiusX =
-      baseRadiusX +
-      ring * 140 +
-      ((hashString(`${node.id}:x`) % 1000) / 1000) * 40;
-    const radiusY =
-      baseRadiusY +
-      ring * 110 +
-      ((hashString(`${node.id}:y`) % 1000) / 1000) * 36;
+  for (const node of sortedNodes) {
+    let placed = false;
 
-    node.x = clamp(
-      bounds.centerX + Math.cos(angle) * radiusX,
-      minCenterX,
-      maxCenterX
-    );
-    node.y = Math.max(
-      bounds.centerY + Math.sin(angle) * radiusY,
-      node.height / 2 + 56
-    );
-  });
+    for (let ring = 0; ring < 12 && !placed; ring += 1) {
+      const slotCount = Math.max(12 + ring * 4, sortedNodes.length + ring * 2);
+      const offset = (hashString(node.id) % slotCount) / slotCount;
+      const radiusX = baseRadiusX + ring * 150;
+      const radiusY = baseRadiusY + ring * 120;
+
+      for (let slot = 0; slot < slotCount; slot += 1) {
+        const angle = ((slot + offset) / slotCount) * Math.PI * 2;
+        const candidate = {
+          x: clamp(
+            bounds.centerX + Math.cos(angle) * radiusX,
+            minCenterX,
+            maxCenterX
+          ),
+          y: Math.max(
+            bounds.centerY + Math.sin(angle) * radiusY,
+            node.height / 2 + 56
+          ),
+          height: node.height,
+        };
+
+        const overlaps = occupiedNodes.some((occupiedNode) =>
+          nodesOverlapWithGap(candidate, occupiedNode, ISOLATED_NODE_BUFFER)
+        );
+
+        if (overlaps) {
+          continue;
+        }
+
+        node.x = candidate.x;
+        node.y = candidate.y;
+        occupiedNodes.push(node);
+        placed = true;
+        break;
+      }
+    }
+
+    if (!placed) {
+      const fallbackIndex = occupiedNodes.length - anchorNodes.length;
+      const fallbackRadiusX = baseRadiusX + 12 * 150 + fallbackIndex * 10;
+      const fallbackRadiusY = baseRadiusY + 12 * 120 + fallbackIndex * 8;
+      const fallbackAngle =
+        (fallbackIndex / Math.max(sortedNodes.length, 1)) * Math.PI * 2;
+
+      node.x = clamp(
+        bounds.centerX + Math.cos(fallbackAngle) * fallbackRadiusX,
+        minCenterX,
+        maxCenterX
+      );
+      node.y = Math.max(
+        bounds.centerY + Math.sin(fallbackAngle) * fallbackRadiusY,
+        node.height / 2 + 56
+      );
+      occupiedNodes.push(node);
+    }
+  }
 }
 
 function resolveNodeOverlaps(nodes: PositionedNode[]) {
@@ -603,7 +647,7 @@ function resolveNodeOverlaps(nodes: PositionedNode[]) {
     {
       maxIterations: 80,
       overlapThreshold: 0.5,
-      margin: 10,
+      margin: NODE_COLLISION_MARGIN,
       minX: 40,
       maxX: VIRTUAL_WIDTH - NODE_WIDTH - 40,
       minY: 40,
