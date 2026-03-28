@@ -184,6 +184,145 @@ function getConnectedComponents(
   return components;
 }
 
+function getNodeDegree(nodeId: string, neighborMap: Map<string, Set<string>>) {
+  return neighborMap.get(nodeId)?.size ?? 0;
+}
+
+function splitComponentIntoClusters(
+  component: PositionedNode[],
+  neighborMap: Map<string, Set<string>>
+) {
+  if (component.length <= 5) {
+    return [component];
+  }
+
+  const targetSeedCount = clamp(Math.round(component.length / 5), 2, 4);
+  const sortedNodes = [...component].sort((a, b) => {
+    return (
+      getNodeDegree(b.id, neighborMap) - getNodeDegree(a.id, neighborMap) ||
+      a.label.localeCompare(b.label)
+    );
+  });
+
+  const seeds: PositionedNode[] = [];
+
+  for (const node of sortedNodes) {
+    const isTooCloseToExistingSeed = seeds.some((seed) => {
+      if (seed.id === node.id) {
+        return true;
+      }
+
+      return neighborMap.get(seed.id)?.has(node.id);
+    });
+
+    if (isTooCloseToExistingSeed && seeds.length < targetSeedCount) {
+      continue;
+    }
+
+    seeds.push(node);
+
+    if (seeds.length >= targetSeedCount) {
+      break;
+    }
+  }
+
+  if (seeds.length <= 1) {
+    return [component];
+  }
+
+  const nodeIds = new Set(component.map((node) => node.id));
+  const assignments = new Map<string, string>();
+  const distances = new Map<string, number>();
+  const queue: Array<{ id: string; seedId: string; distance: number }> = [];
+
+  for (const seed of seeds) {
+    assignments.set(seed.id, seed.id);
+    distances.set(seed.id, 0);
+    queue.push({ id: seed.id, seedId: seed.id, distance: 0 });
+  }
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (!current) {
+      continue;
+    }
+
+    for (const neighborId of neighborMap.get(current.id) ?? []) {
+      if (!nodeIds.has(neighborId)) {
+        continue;
+      }
+
+      const nextDistance = current.distance + 1;
+      const existingDistance = distances.get(neighborId);
+      const existingSeed = assignments.get(neighborId);
+
+      if (
+        existingDistance === undefined ||
+        nextDistance < existingDistance ||
+        (nextDistance === existingDistance &&
+          existingSeed &&
+          current.seedId.localeCompare(existingSeed) < 0)
+      ) {
+        assignments.set(neighborId, current.seedId);
+        distances.set(neighborId, nextDistance);
+        queue.push({
+          id: neighborId,
+          seedId: current.seedId,
+          distance: nextDistance,
+        });
+      }
+    }
+  }
+
+  const clusters = new Map<string, PositionedNode[]>();
+  for (const seed of seeds) {
+    clusters.set(seed.id, []);
+  }
+
+  for (const node of component) {
+    const seedId = assignments.get(node.id) ?? seeds[0].id;
+    const cluster = clusters.get(seedId);
+    if (!cluster) {
+      continue;
+    }
+    cluster.push(node);
+  }
+
+  return [...clusters.values()].filter((cluster) => cluster.length > 0);
+}
+
+function getClusterAnchors(
+  clusterCount: number,
+  centerX: number,
+  centerY: number
+) {
+  if (clusterCount === 0) {
+    return [] as Point[];
+  }
+
+  if (clusterCount === 1) {
+    return [{ x: centerX, y: centerY }];
+  }
+
+  const anchors: Point[] = [{ x: centerX, y: centerY }];
+
+  for (let index = 1; index < clusterCount; index += 1) {
+    const ring = Math.floor((index - 1) / 6) + 1;
+    const positionInRing = (index - 1) % 6;
+    const ringCount = Math.min(clusterCount - anchors.length, 6);
+    const angle = (positionInRing / ringCount) * Math.PI * 2 - Math.PI / 2;
+    const radiusX = 250 + (ring - 1) * 170;
+    const radiusY = 170 + (ring - 1) * 120;
+
+    anchors.push({
+      x: centerX + Math.cos(angle) * radiusX,
+      y: centerY + Math.sin(angle) * radiusY,
+    });
+  }
+
+  return anchors;
+}
+
 function resolveNodeOverlaps(nodes: PositionedNode[]) {
   const minX = NODE_WIDTH / 2 + 40;
   const maxX = VIRTUAL_WIDTH - NODE_WIDTH / 2 - 40;
@@ -287,44 +426,60 @@ function positionNodes(graph: PatientGraph) {
   const centerX = VIRTUAL_WIDTH / 2;
   const centerY = MIN_GRAPH_HEIGHT / 2;
   const isolatedNodes: PositionedNode[] = [];
-  const connectedComponents = components.filter((component) => {
-    if (component.length === 1) {
-      const node = component[0];
-      if ((neighborMap.get(node.id)?.size ?? 0) === 0) {
-        isolatedNodes.push(node);
-        return false;
+  const connectedClusters = components
+    .filter((component) => {
+      if (component.length === 1) {
+        const node = component[0];
+        if ((neighborMap.get(node.id)?.size ?? 0) === 0) {
+          isolatedNodes.push(node);
+          return false;
+        }
       }
-    }
 
-    return true;
-  });
+      return true;
+    })
+    .flatMap((component) => splitComponentIntoClusters(component, neighborMap))
+    .sort((a, b) => {
+      const score = (cluster: PositionedNode[]) =>
+        cluster.reduce(
+          (sum, node) => sum + getNodeDegree(node.id, neighborMap),
+          0
+        );
 
-  connectedComponents.forEach((component, componentIndex) => {
-    const anchorRadius = componentIndex === 0 ? 0 : 120 + componentIndex * 90;
-    const anchorAngle = componentIndex * 1.35;
-    const anchorX = centerX + Math.cos(anchorAngle) * anchorRadius;
-    const anchorY = centerY + Math.sin(anchorAngle) * anchorRadius * 0.7;
-    const sortedNodes = [...component].sort((a, b) => {
+      return score(b) - score(a) || b.length - a.length;
+    });
+
+  const clusterAnchors = getClusterAnchors(
+    connectedClusters.length,
+    centerX,
+    centerY
+  );
+
+  connectedClusters.forEach((cluster, clusterIndex) => {
+    const anchor = clusterAnchors[clusterIndex] ?? { x: centerX, y: centerY };
+    const sortedNodes = [...cluster].sort((a, b) => {
       const degreeDiff =
-        (neighborMap.get(b.id)?.size ?? 0) - (neighborMap.get(a.id)?.size ?? 0);
+        getNodeDegree(b.id, neighborMap) - getNodeDegree(a.id, neighborMap);
       return degreeDiff || a.label.localeCompare(b.label);
     });
 
     sortedNodes.forEach((node, nodeIndex) => {
       if (nodeIndex === 0) {
-        node.x = anchorX;
-        node.y = anchorY;
+        node.x = anchor.x;
+        node.y = anchor.y;
         return;
       }
 
-      const ring = Math.floor((nodeIndex - 1) / 5) + 1;
-      const indexInRing = (nodeIndex - 1) % 5;
-      const angleOffset = getDeterministicUnit(node.id) * Math.PI * 2;
-      const angle = angleOffset + (indexInRing / 5) * Math.PI * 2;
-      const radius = 120 + ring * 60;
+      const ring = Math.floor((nodeIndex - 1) / 4) + 1;
+      const nodesInRing = 4 + Math.max(0, ring - 1) * 2;
+      const indexInRing = (nodeIndex - 1) % nodesInRing;
+      const angleOffset =
+        getDeterministicUnit(`${clusterIndex}:${node.id}`) * Math.PI * 2;
+      const angle = angleOffset + (indexInRing / nodesInRing) * Math.PI * 2;
+      const radius = 120 + ring * 75;
 
-      node.x = anchorX + Math.cos(angle) * radius;
-      node.y = anchorY + Math.sin(angle) * radius * 0.8;
+      node.x = anchor.x + Math.cos(angle) * radius;
+      node.y = anchor.y + Math.sin(angle) * radius * 0.72;
     });
   });
 
@@ -337,7 +492,7 @@ function positionNodes(graph: PatientGraph) {
   });
 
   const connectedSet = new Set(
-    connectedComponents.flatMap((component) => component.map((node) => node.id))
+    connectedClusters.flatMap((cluster) => cluster.map((node) => node.id))
   );
 
   for (let iteration = 0; iteration < 220; iteration += 1) {
@@ -428,22 +583,83 @@ function positionNodes(graph: PatientGraph) {
       targetForce.y -= unitY * spring;
     }
 
-    for (const component of connectedComponents) {
-      const anchor = component.reduce(
+    connectedClusters.forEach((cluster, clusterIndex) => {
+      const anchor = clusterAnchors[clusterIndex] ?? { x: centerX, y: centerY };
+      const centroid = cluster.reduce(
         (sum, node) => ({ x: sum.x + node.x, y: sum.y + node.y }),
         { x: 0, y: 0 }
       );
-      const anchorX = anchor.x / component.length;
-      const anchorY = anchor.y / component.length;
+      const centroidX = centroid.x / cluster.length;
+      const centroidY = centroid.y / cluster.length;
 
-      for (const node of component) {
+      for (const node of cluster) {
         const force = forces.get(node.id);
         if (!force) {
           continue;
         }
 
-        force.x += (centerX - anchorX) * 0.01 + (anchorX - node.x) * 0.02;
-        force.y += (centerY - anchorY) * 0.01 + (anchorY - node.y) * 0.02;
+        force.x +=
+          (anchor.x - centroidX) * 0.012 + (centroidX - node.x) * 0.014;
+        force.y +=
+          (anchor.y - centroidY) * 0.012 + (centroidY - node.y) * 0.014;
+      }
+    });
+
+    for (let index = 0; index < connectedClusters.length; index += 1) {
+      for (
+        let otherIndex = index + 1;
+        otherIndex < connectedClusters.length;
+        otherIndex += 1
+      ) {
+        const cluster = connectedClusters[index];
+        const otherCluster = connectedClusters[otherIndex];
+        const centroid = cluster.reduce(
+          (sum, node) => ({ x: sum.x + node.x, y: sum.y + node.y }),
+          { x: 0, y: 0 }
+        );
+        const otherCentroid = otherCluster.reduce(
+          (sum, node) => ({ x: sum.x + node.x, y: sum.y + node.y }),
+          { x: 0, y: 0 }
+        );
+        const centerA = {
+          x: centroid.x / cluster.length,
+          y: centroid.y / cluster.length,
+        };
+        const centerB = {
+          x: otherCentroid.x / otherCluster.length,
+          y: otherCentroid.y / otherCluster.length,
+        };
+        const dx = centerB.x - centerA.x;
+        const dy = centerB.y - centerA.y;
+        const distance = Math.max(Math.hypot(dx, dy), 1);
+        const targetDistance =
+          260 + (cluster.length + otherCluster.length) * 12;
+
+        if (distance >= targetDistance) {
+          continue;
+        }
+
+        const push = ((targetDistance - distance) / targetDistance) * 1.8;
+        const unitX = dx / distance;
+        const unitY = dy / distance;
+
+        for (const node of cluster) {
+          const force = forces.get(node.id);
+          if (!force) {
+            continue;
+          }
+          force.x -= unitX * push;
+          force.y -= unitY * push;
+        }
+
+        for (const node of otherCluster) {
+          const force = forces.get(node.id);
+          if (!force) {
+            continue;
+          }
+          force.x += unitX * push;
+          force.y += unitY * push;
+        }
       }
     }
 
