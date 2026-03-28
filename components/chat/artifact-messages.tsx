@@ -69,9 +69,14 @@ function PureArtifactMessages({
       <AnimatePresence mode="wait">
         {status === "submitted" &&
           !messages.some((msg) =>
-            msg.parts?.some(
-              (part) => "state" in part && part.state === "approval-responded"
-            )
+            msg.parts?.some((part) => {
+              const state =
+                part && typeof part === "object" && "state" in part
+                  ? part.state
+                  : undefined;
+
+              return state === "approval-responded";
+            })
           ) && <ThinkingMessage key="thinking" />}
       </AnimatePresence>
 

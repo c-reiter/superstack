@@ -117,9 +117,14 @@ const PurePreviewMessage = ({
       part.text?.trim().length > 0
   );
   const mergedReasoning = {
-    isStreaming: reasoningParts.some(
-      (part) => "state" in part && part.state === "streaming"
-    ),
+    isStreaming: reasoningParts.some((part) => {
+      const state =
+        part && typeof part === "object" && "state" in part
+          ? part.state
+          : undefined;
+
+      return state === "streaming";
+    }),
     text: reasoningParts.map((part) => part.text).join("\n\n"),
   };
 

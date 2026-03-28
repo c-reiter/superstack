@@ -204,15 +204,16 @@ function PureMultimodalInput({
       return false;
     }
 
-    return lastAssistantMessage.parts.some((part) => {
-      if (!("state" in part)) {
-        return false;
-      }
+    return (lastAssistantMessage.parts ?? []).some((part) => {
+      const state =
+        part && typeof part === "object" && "state" in part
+          ? part.state
+          : undefined;
 
       return (
-        part.state === "streaming" ||
-        part.state === "input-streaming" ||
-        part.state === "approval-requested"
+        state === "streaming" ||
+        state === "input-streaming" ||
+        state === "approval-requested"
       );
     });
   }, [messages]);
