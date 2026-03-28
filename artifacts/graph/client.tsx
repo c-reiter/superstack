@@ -13,21 +13,14 @@ import type { PatientGraph } from "@/lib/superstack/types";
 
 type GraphArtifactMetadata = Record<string, never>;
 
+const COLUMN_ORDER = ["left", "stack", "plan", "signals"] as const;
+type ColumnKey = (typeof COLUMN_ORDER)[number];
+
 type PositionedNode = PatientGraph["nodes"][number] & {
   x: number;
   y: number;
   height: number;
-};
-
-const COLUMN_X: Record<PatientGraph["nodes"][number]["type"], number> = {
-  condition: 130,
-  symptom: 130,
-  medication: 380,
-  supplement: 380,
-  recommendation: 630,
-  goal: 630,
-  lab: 870,
-  diagnostic: 870,
+  columnKey: ColumnKey;
 };
 
 const TYPE_LABELS: Record<PatientGraph["nodes"][number]["type"], string> = {
@@ -71,7 +64,7 @@ function parseGraph(content: string): PatientGraph | null {
   }
 }
 
-function getColumnKey(type: PositionedNode["type"]) {
+function getColumnKey(type: PositionedNode["type"]): ColumnKey {
   switch (type) {
     case "condition":
     case "symptom":
@@ -149,35 +142,167 @@ function estimateNodeHeight(node: PatientGraph["nodes"][number]) {
   );
 }
 
-function positionNodes(graph: PatientGraph) {
-  const columnOffsets = {
-    left: 56,
-    stack: 56,
-    plan: 56,
-    signals: 56,
-  };
+function getColumnXPositions(activeColumns: ColumnKey[]) {
+  const positions = new Map<ColumnKey, number>();
+  const margin = 140;
 
-  let maxColumnBottom = 0;
+  if (activeColumns.length === 0) {
+    for (const columnKey of COLUMN_ORDER) {
+      positions.set(columnKey, VIRTUAL_WIDTH / 2);
+    }
 
-  const positionedNodes = graph.nodes.map((node) => {
-    const columnKey = getColumnKey(node.type);
-    const nodeHeight = estimateNodeHeight(node);
-    const centerY = columnOffsets[columnKey] + nodeHeight / 2;
+    return positions;
+  }
 
-    columnOffsets[columnKey] += nodeHeight + NODE_VERTICAL_GAP;
-    maxColumnBottom = Math.max(maxColumnBottom, columnOffsets[columnKey]);
+  if (activeColumns.length === 1) {
+    positions.set(activeColumns[0], VIRTUAL_WIDTH / 2);
+    return positions;
+  }
 
-    return {
-      ...node,
-      x: COLUMN_X[node.type] ?? 380,
-      y: centerY,
-      height: nodeHeight,
-    };
+  const usableWidth = VIRTUAL_WIDTH - margin * 2;
+  const step = usableWidth / (activeColumns.length - 1);
+
+  activeColumns.forEach((columnKey, index) => {
+    positions.set(columnKey, margin + index * step);
   });
 
-  const height = Math.max(MIN_GRAPH_HEIGHT, maxColumnBottom + 56);
+  return positions;
+}
 
-  return { positionedNodes, height };
+function packColumnNodes(nodes: PositionedNode[]) {
+  let cursor = 56;
+
+  for (const node of nodes) {
+    const minCenterY = cursor + node.height / 2;
+    node.y = Math.max(node.y, minCenterY);
+    cursor = node.y + node.height / 2 + NODE_VERTICAL_GAP;
+  }
+
+  return cursor;
+}
+
+function positionNodes(graph: PatientGraph) {
+  const nodes = graph.nodes.map((node, index) => ({
+    ...node,
+    columnKey: getColumnKey(node.type),
+    height: estimateNodeHeight(node),
+    x: 0,
+    y: 56 + index * (NODE_BASE_HEIGHT + NODE_VERTICAL_GAP),
+  }));
+
+  const activeColumns = COLUMN_ORDER.filter((columnKey) =>
+    nodes.some((node) => node.columnKey === columnKey)
+  );
+  const columnXPositions = getColumnXPositions(activeColumns);
+
+  for (const node of nodes) {
+    node.x = columnXPositions.get(node.columnKey) ?? VIRTUAL_WIDTH / 2;
+  }
+
+  const nodesById = new Map(nodes.map((node) => [node.id, node]));
+  const neighborMap = new Map<string, Set<string>>();
+
+  for (const node of nodes) {
+    neighborMap.set(node.id, new Set());
+  }
+
+  for (const edge of graph.edges) {
+    const source = nodesById.get(edge.source);
+    const target = nodesById.get(edge.target);
+
+    if (!source || !target) {
+      continue;
+    }
+
+    neighborMap.get(source.id)?.add(target.id);
+    neighborMap.get(target.id)?.add(source.id);
+  }
+
+  const columns = new Map<ColumnKey, PositionedNode[]>();
+  for (const columnKey of COLUMN_ORDER) {
+    columns.set(
+      columnKey,
+      nodes.filter((node) => node.columnKey === columnKey)
+    );
+  }
+
+  for (const columnKey of COLUMN_ORDER) {
+    const columnNodes = columns.get(columnKey) ?? [];
+    columnNodes.sort((a, b) => a.y - b.y || a.label.localeCompare(b.label));
+    packColumnNodes(columnNodes);
+  }
+
+  for (let iteration = 0; iteration < 8; iteration += 1) {
+    for (const columnKey of COLUMN_ORDER) {
+      const columnNodes = columns.get(columnKey) ?? [];
+
+      columnNodes.sort((a, b) => {
+        const aNeighbors = [...(neighborMap.get(a.id) ?? [])]
+          .map((id) => nodesById.get(id))
+          .filter((node): node is PositionedNode => Boolean(node));
+        const bNeighbors = [...(neighborMap.get(b.id) ?? [])]
+          .map((id) => nodesById.get(id))
+          .filter((node): node is PositionedNode => Boolean(node));
+
+        const aBarycenter =
+          aNeighbors.length > 0
+            ? aNeighbors.reduce((sum, node) => sum + node.y, 0) /
+              aNeighbors.length
+            : a.y;
+        const bBarycenter =
+          bNeighbors.length > 0
+            ? bNeighbors.reduce((sum, node) => sum + node.y, 0) /
+              bNeighbors.length
+            : b.y;
+
+        return (
+          aBarycenter - bBarycenter ||
+          a.y - b.y ||
+          a.label.localeCompare(b.label)
+        );
+      });
+
+      for (const node of columnNodes) {
+        const neighbors = [...(neighborMap.get(node.id) ?? [])]
+          .map((id) => nodesById.get(id))
+          .filter((neighbor): neighbor is PositionedNode => Boolean(neighbor));
+
+        if (neighbors.length === 0) {
+          continue;
+        }
+
+        node.y =
+          neighbors.reduce((sum, neighbor) => sum + neighbor.y, 0) /
+          neighbors.length;
+      }
+
+      packColumnNodes(columnNodes);
+    }
+
+    for (const columnKey of [...COLUMN_ORDER].reverse()) {
+      const columnNodes = columns.get(columnKey) ?? [];
+      packColumnNodes(columnNodes);
+    }
+  }
+
+  const maxColumnBottom = Math.max(
+    ...COLUMN_ORDER.map((columnKey) => {
+      const columnNodes = columns.get(columnKey) ?? [];
+      const lastNode = columnNodes.at(-1);
+
+      if (!lastNode) {
+        return 0;
+      }
+
+      return lastNode.y + lastNode.height / 2 + 56;
+    }),
+    MIN_GRAPH_HEIGHT
+  );
+
+  return {
+    positionedNodes: nodes,
+    height: Math.max(MIN_GRAPH_HEIGHT, maxColumnBottom),
+  };
 }
 
 function clamp(value: number, min: number, max: number) {
