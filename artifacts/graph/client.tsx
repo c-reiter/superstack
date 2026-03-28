@@ -556,8 +556,10 @@ function placeIsolatedNodesAroundGroups(
       hashString(a.id) - hashString(b.id) || a.label.localeCompare(b.label)
   );
   const nodesPerRing = Math.max(6, Math.min(10, sortedNodes.length));
-  const baseRadiusX = Math.max(bounds.width / 2 + 170, 250);
-  const baseRadiusY = Math.max(bounds.height / 2 + 140, 180);
+  const minCenterX = NODE_WIDTH / 2 + 56;
+  const maxCenterX = VIRTUAL_WIDTH - NODE_WIDTH / 2 - 56;
+  const baseRadiusX = Math.max(bounds.width / 2 + 210, 300);
+  const baseRadiusY = Math.max(bounds.height / 2 + 170, 220);
 
   sortedNodes.forEach((node, index) => {
     const ring = Math.floor(index / nodesPerRing);
@@ -570,15 +572,22 @@ function placeIsolatedNodesAroundGroups(
       ring * 0.28;
     const radiusX =
       baseRadiusX +
-      ring * 120 +
+      ring * 140 +
       ((hashString(`${node.id}:x`) % 1000) / 1000) * 40;
     const radiusY =
       baseRadiusY +
-      ring * 90 +
+      ring * 110 +
       ((hashString(`${node.id}:y`) % 1000) / 1000) * 36;
 
-    node.x = bounds.centerX + Math.cos(angle) * radiusX;
-    node.y = bounds.centerY + Math.sin(angle) * radiusY;
+    node.x = clamp(
+      bounds.centerX + Math.cos(angle) * radiusX,
+      minCenterX,
+      maxCenterX
+    );
+    node.y = Math.max(
+      bounds.centerY + Math.sin(angle) * radiusY,
+      node.height / 2 + 56
+    );
   });
 }
 
@@ -742,8 +751,6 @@ function positionNodes(graph: PatientGraph) {
     connectedClusterLayouts.flatMap((layout) => layout.nodes)
   );
 
-  resolveNodeOverlaps(nodes);
-
   for (const node of nodes) {
     node.x = clamp(
       node.x,
@@ -752,6 +759,8 @@ function positionNodes(graph: PatientGraph) {
     );
     node.y = Math.max(node.y, node.height / 2 + 40);
   }
+
+  resolveNodeOverlaps(nodes);
 
   const graphHeight = Math.max(
     MIN_GRAPH_HEIGHT,
@@ -1399,7 +1408,7 @@ export function GraphCanvas({ graph }: { graph: PatientGraph }) {
 
               {hoveredEdge ? (
                 <div
-                  className="pointer-events-none absolute z-20 w-56 -translate-x-1/2 -translate-y-[calc(100%+12px)] rounded-xl border border-border/70 bg-background/96 px-3 py-2 shadow-lg"
+                  className="pointer-events-none absolute z-20 w-80 max-w-[24rem] -translate-x-1/2 -translate-y-[calc(100%+12px)] rounded-xl border border-border/70 bg-background/96 px-3 py-2 shadow-lg"
                   style={{
                     left: hoveredEdge.x,
                     top: hoveredEdge.y,
