@@ -303,14 +303,31 @@ function findNodesByType(nodes: GraphNode[], type: GraphNodeType) {
   return nodes.filter((node) => node.type === type);
 }
 
+function nodeMatches(node: GraphNode, pattern: RegExp) {
+  return pattern.test(
+    normalizeForMatch(
+      [node.label, node.subtitle ?? undefined].filter(Boolean).join(" ")
+    )
+  );
+}
+
+function findNodes(
+  nodes: GraphNode[],
+  types: GraphNodeType | GraphNodeType[],
+  pattern: RegExp
+) {
+  const allowedTypes = new Set(Array.isArray(types) ? types : [types]);
+  return nodes.filter(
+    (node) => allowedTypes.has(node.type) && nodeMatches(node, pattern)
+  );
+}
+
 function findFirstNode(
   nodes: GraphNode[],
   type: GraphNodeType,
   pattern: RegExp
 ) {
-  return nodes.find(
-    (node) => node.type === type && pattern.test(normalizeForMatch(node.label))
-  );
+  return nodes.find((node) => node.type === type && nodeMatches(node, pattern));
 }
 
 function connectIndicationDrivenEdges(
@@ -352,6 +369,64 @@ function connectIndicationDrivenEdges(
           "info"
         );
       }
+    }
+  }
+}
+
+function connectMedicationInteractionEdges(
+  nodes: GraphNode[],
+  edges: GraphEdge[]
+) {
+  const stimulantNodes = findNodes(
+    nodes,
+    ["medication", "supplement"],
+    /(ritalin|methylphenidate|concerta|focalin|dexmethylphenidate|adderall|amphetamine|dextroamphetamine|dexamphetamine|vyvanse|lisdexamfetamine|modafinil|armodafinil)/
+  );
+  const yohimbineNodes = findNodes(
+    nodes,
+    ["medication", "supplement"],
+    /yohimbine/
+  );
+  const maobNodes = findNodes(
+    nodes,
+    ["medication", "supplement"],
+    /(mao-b|maob|selegiline|rasagiline|safinamide|azilect|eldepryl|zelapar|emsam|xadago)/
+  );
+
+  for (const stimulant of stimulantNodes) {
+    for (const yohimbine of yohimbineNodes) {
+      addEdge(
+        edges,
+        stimulant,
+        yohimbine,
+        "interaction risk",
+        "This combination can amplify sympathetic tone and may increase heart rate, blood pressure, anxiety, tremor, and insomnia more than either agent alone.",
+        "high"
+      );
+    }
+
+    for (const maob of maobNodes) {
+      addEdge(
+        edges,
+        stimulant,
+        maob,
+        "interaction risk",
+        "A stimulant layered with MAO-B inhibition can increase catecholamine signaling and may raise blood pressure, heart rate, agitation, and insomnia; risk increases if MAO-B selectivity is reduced or exposure is higher.",
+        "high"
+      );
+    }
+  }
+
+  for (const yohimbine of yohimbineNodes) {
+    for (const maob of maobNodes) {
+      addEdge(
+        edges,
+        yohimbine,
+        maob,
+        "interaction risk",
+        "Yohimbine is sympathomimetic, so combining it with MAO-B inhibition can further amplify adrenergic effects and hypertension risk.",
+        "high"
+      );
     }
   }
 }
@@ -517,6 +592,7 @@ function buildGraphFromProfile(profile: PatientProfile): PatientGraph {
   const edges: GraphEdge[] = [];
 
   connectIndicationDrivenEdges(profile, nodes, edges);
+  connectMedicationInteractionEdges(nodes, edges);
   connectKnownClinicalEdges(nodes, edges);
 
   return {
