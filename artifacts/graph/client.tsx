@@ -16,6 +16,7 @@ type GraphArtifactMetadata = Record<string, never>;
 type PositionedNode = PatientGraph["nodes"][number] & {
   x: number;
   y: number;
+  height: number;
 };
 
 const COLUMN_X: Record<PatientGraph["nodes"][number]["type"], number> = {
@@ -96,7 +97,13 @@ function getColumnKey(type: PositionedNode["type"]) {
 
 const VIRTUAL_WIDTH = 1000;
 const MIN_GRAPH_HEIGHT = 560;
-const ROW_GAP = 96;
+const NODE_WIDTH = 160;
+const NODE_VERTICAL_GAP = 28;
+const NODE_BASE_HEIGHT = 54;
+const LABEL_LINE_HEIGHT = 18;
+const SUBTITLE_LINE_HEIGHT = 16;
+const MAX_LABEL_LINES = 3;
+const MAX_SUBTITLE_LINES = 3;
 
 type ElementSize = {
   width: number;
@@ -108,34 +115,72 @@ type ViewportScroll = {
   top: number;
 };
 
+type Point = {
+  x: number;
+  y: number;
+};
+
 const GRAPH_PADDING = 240;
 const MIN_ZOOM = 0.8;
 const MAX_ZOOM = 3.5;
 const WHEEL_ZOOM_SENSITIVITY = 0.0012;
 const GESTURE_ZOOM_DAMPING = 0.35;
 
+function estimateLineCount(text: string | undefined, charsPerLine: number) {
+  if (!text) {
+    return 0;
+  }
+
+  return Math.max(1, Math.ceil(text.trim().length / charsPerLine));
+}
+
+function estimateNodeHeight(node: PatientGraph["nodes"][number]) {
+  const labelLines = clamp(
+    estimateLineCount(node.label, 18),
+    1,
+    MAX_LABEL_LINES
+  );
+  const subtitleLines = clamp(
+    estimateLineCount(node.subtitle ?? undefined, 26),
+    0,
+    MAX_SUBTITLE_LINES
+  );
+
+  return (
+    NODE_BASE_HEIGHT +
+    (labelLines - 1) * LABEL_LINE_HEIGHT +
+    subtitleLines * SUBTITLE_LINE_HEIGHT +
+    (subtitleLines > 0 ? 6 : 0)
+  );
+}
+
 function positionNodes(graph: PatientGraph) {
-  const counters = {
-    left: 0,
-    stack: 0,
-    plan: 0,
-    signals: 0,
+  const columnOffsets = {
+    left: 56,
+    stack: 56,
+    plan: 56,
+    signals: 56,
   };
+
+  let maxColumnBottom = 0;
 
   const positionedNodes = graph.nodes.map((node) => {
     const columnKey = getColumnKey(node.type);
-    const row = counters[columnKey];
-    counters[columnKey] += 1;
+    const nodeHeight = estimateNodeHeight(node);
+    const centerY = columnOffsets[columnKey] + nodeHeight / 2;
+
+    columnOffsets[columnKey] += nodeHeight + NODE_VERTICAL_GAP;
+    maxColumnBottom = Math.max(maxColumnBottom, columnOffsets[columnKey]);
 
     return {
       ...node,
       x: COLUMN_X[node.type] ?? 380,
-      y: 110 + row * ROW_GAP,
+      y: centerY,
+      height: nodeHeight,
     };
   });
 
-  const maxRows = Math.max(...Object.values(counters), 1);
-  const height = Math.max(MIN_GRAPH_HEIGHT, 180 + (maxRows - 1) * ROW_GAP);
+  const height = Math.max(MIN_GRAPH_HEIGHT, maxColumnBottom + 56);
 
   return { positionedNodes, height };
 }
@@ -192,6 +237,47 @@ function dampZoomFactor(rawFactor: number, damping = GESTURE_ZOOM_DAMPING) {
   }
 
   return 1 + (rawFactor - 1) * damping;
+}
+
+function getNodeAttachmentPoint(
+  node: PositionedNode,
+  target: PositionedNode
+): Point {
+  const dx = target.x - node.x;
+  const dy = target.y - node.y;
+  const halfWidth = NODE_WIDTH / 2;
+  const halfHeight = node.height / 2;
+
+  if (dx === 0 && dy === 0) {
+    return { x: node.x, y: node.y };
+  }
+
+  const scaleX = dx === 0 ? Number.POSITIVE_INFINITY : halfWidth / Math.abs(dx);
+  const scaleY =
+    dy === 0 ? Number.POSITIVE_INFINITY : halfHeight / Math.abs(dy);
+  const scale = Math.min(scaleX, scaleY);
+
+  return {
+    x: node.x + dx * scale,
+    y: node.y + dy * scale,
+  };
+}
+
+function buildEdgePath(source: PositionedNode, target: PositionedNode) {
+  const start = getNodeAttachmentPoint(source, target);
+  const end = getNodeAttachmentPoint(target, source);
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+
+  if (Math.abs(dx) >= Math.abs(dy)) {
+    const handle = Math.max(Math.abs(dx) * 0.35, 40) * Math.sign(dx || 1);
+
+    return `M ${start.x} ${start.y} C ${start.x + handle} ${start.y}, ${end.x - handle} ${end.y}, ${end.x} ${end.y}`;
+  }
+
+  const handle = Math.max(Math.abs(dy) * 0.35, 40) * Math.sign(dy || 1);
+
+  return `M ${start.x} ${start.y} C ${start.x} ${start.y + handle}, ${end.x} ${end.y - handle}, ${end.x} ${end.y}`;
 }
 
 export function GraphCanvas({ graph }: { graph: PatientGraph }) {
@@ -582,8 +668,7 @@ export function GraphCanvas({ graph }: { graph: PatientGraph }) {
                     return null;
                   }
 
-                  const midX = (source.x + target.x) / 2;
-                  const curve = `M ${source.x} ${source.y} C ${(source.x + midX) / 2} ${source.y}, ${(target.x + midX) / 2} ${target.y}, ${target.x} ${target.y}`;
+                  const curve = buildEdgePath(source, target);
 
                   return (
                     <path
@@ -603,18 +688,20 @@ export function GraphCanvas({ graph }: { graph: PatientGraph }) {
 
               {positionedNodes.map((node) => (
                 <div
-                  className={`absolute w-40 -translate-x-1/2 -translate-y-1/2 rounded-xl border px-3 py-2.5 ${TYPE_STYLES[node.type]}`}
+                  className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-xl border px-3 py-2.5 ${TYPE_STYLES[node.type]}`}
                   key={node.id}
                   style={{
                     left: `${(node.x / VIRTUAL_WIDTH) * 100}%`,
+                    minHeight: node.height,
                     top: node.y,
+                    width: NODE_WIDTH,
                   }}
                   title={node.subtitle ?? node.label}
                 >
                   <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-foreground/55">
                     {TYPE_LABELS[node.type]}
                   </div>
-                  <div className="mt-1 text-sm font-semibold leading-tight text-foreground">
+                  <div className="mt-1 line-clamp-3 text-sm font-semibold leading-tight text-foreground">
                     {node.label}
                   </div>
                   {node.subtitle ? (
