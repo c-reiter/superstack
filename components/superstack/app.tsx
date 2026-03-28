@@ -637,6 +637,20 @@ export function SuperstackApp() {
     );
 
     setModeOverride("consult");
+
+    const generateGraphAfterFinish = async () => {
+      await fetch(getPatientsApiPath(patient.id, "/graph"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ selectedModelId: DEFAULT_CHAT_MODEL }),
+      });
+
+      await Promise.all([mutatePatient(), mutatePatients()]);
+    };
+
+    generateGraphAfterFinish().catch((error) => {
+      console.error("Failed to generate graph after finishing setup:", error);
+    });
   }
 
   if (

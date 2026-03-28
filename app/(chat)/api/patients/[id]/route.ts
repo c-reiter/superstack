@@ -1,10 +1,7 @@
 import { z } from "zod";
 import { auth } from "@/app/(auth)/auth";
-import { allowedModelIds, DEFAULT_CHAT_MODEL } from "@/lib/ai/models";
-import { generateCurrentPatientGraph } from "@/lib/ai/superstack-graph";
 import { getPatientById } from "@/lib/db/queries";
 import { normalizePatientDisplayName } from "@/lib/superstack/naming";
-import { extractPatientProfileFromMessages } from "@/lib/superstack/profile-extraction";
 import { getHydratedPatient, savePatientRecord } from "@/lib/superstack/store";
 import {
   emptyPatientProfile,
@@ -99,11 +96,6 @@ export async function PATCH(
     return Response.json({ error: "not_found" }, { status: 404 });
   }
 
-  const modelId =
-    body.selectedModelId && allowedModelIds.has(body.selectedModelId)
-      ? body.selectedModelId
-      : DEFAULT_CHAT_MODEL;
-
   const baseProfile =
     body.profile !== undefined
       ? {
@@ -121,61 +113,39 @@ export async function PATCH(
       );
     }
 
-    try {
-      const extractedProfile = await extractPatientProfileFromMessages({
-        existingProfile: baseProfile,
-        messages: hydratedPatient.intakeMessages,
-        modelId,
-      });
-      const resolvedDisplayName =
-        normalizePatientDisplayName(extractedProfile.displayName) ??
-        normalizePatientDisplayName(body.name) ??
-        normalizePatientDisplayName(hydratedPatient.profile.displayName) ??
-        hydratedPatient.name;
-      const resolvedProfile = {
-        ...extractedProfile,
-        ...(resolvedDisplayName ? { displayName: resolvedDisplayName } : {}),
-      };
-      const currentGraph = await generateCurrentPatientGraph({
-        profile: resolvedProfile,
-        intakeMessages: hydratedPatient.intakeMessages,
-        consultMessages:
-          body.consultMessages !== undefined
-            ? body.consultMessages
-            : hydratedPatient.consultMessages,
-        modelId,
-      });
+    const resolvedDisplayName =
+      normalizePatientDisplayName(body.name) ??
+      normalizePatientDisplayName(baseProfile.displayName) ??
+      normalizePatientDisplayName(hydratedPatient.profile.displayName) ??
+      hydratedPatient.name;
+    const resolvedProfile = {
+      ...baseProfile,
+      ...(resolvedDisplayName ? { displayName: resolvedDisplayName } : {}),
+    };
 
-      const patient = await savePatientRecord({
-        id,
-        userId: session.user.id,
-        ...(resolvedDisplayName ? { name: resolvedDisplayName } : {}),
-        ...(body.summary !== undefined
-          ? { summary: body.summary }
-          : { summary: summarizeProfile(resolvedProfile) }),
-        setupComplete: true,
-        profile: resolvedProfile,
-        currentGraph,
-        ...(body.intakeMessages !== undefined
-          ? { intakeMessages: body.intakeMessages }
-          : {}),
-        ...(body.consultMessages !== undefined
-          ? { consultMessages: body.consultMessages }
-          : {}),
-      });
+    const patient = await savePatientRecord({
+      id,
+      userId: session.user.id,
+      ...(resolvedDisplayName ? { name: resolvedDisplayName } : {}),
+      ...(body.summary !== undefined
+        ? { summary: body.summary }
+        : { summary: summarizeProfile(resolvedProfile) }),
+      setupComplete: true,
+      profile: resolvedProfile,
+      currentGraph: null,
+      ...(body.intakeMessages !== undefined
+        ? { intakeMessages: body.intakeMessages }
+        : {}),
+      ...(body.consultMessages !== undefined
+        ? { consultMessages: body.consultMessages }
+        : {}),
+    });
 
-      if (!patient) {
-        return Response.json({ error: "not_found" }, { status: 404 });
-      }
-
-      return Response.json({ patient }, { status: 200 });
-    } catch (error) {
-      console.error("Failed to finalize patient setup:", error);
-      return Response.json(
-        { error: "failed_to_finalize_patient_setup" },
-        { status: 500 }
-      );
+    if (!patient) {
+      return Response.json({ error: "not_found" }, { status: 404 });
     }
+
+    return Response.json({ patient }, { status: 200 });
   }
 
   const patient = await savePatientRecord({
