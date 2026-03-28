@@ -21,7 +21,7 @@ import { textArtifact } from "@/artifacts/text/client";
 import { useArtifact } from "@/hooks/use-artifact";
 import type { Document, Vote } from "@/lib/db/schema";
 import type { Attachment, ChatMessage } from "@/lib/types";
-import { cn, fetcher } from "@/lib/utils";
+import { fetcher } from "@/lib/utils";
 import { useSidebar } from "../ui/sidebar";
 import { ArtifactActions } from "./artifact-actions";
 import { ArtifactCloseButton } from "./artifact-close-button";
@@ -357,10 +357,7 @@ function PureArtifact({
         </div>
       )}
       <div
-        className={cn(
-          "relative flex-1 bg-background",
-          artifact.kind === "graph" ? "overflow-hidden" : "overflow-y-auto"
-        )}
+        className="relative flex-1 overflow-y-auto bg-background"
         data-slot="artifact-content"
         onScroll={() => {
           const el = artifactContentRef.current;
