@@ -14,7 +14,7 @@ import {
 } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
-import type { ArtifactKind } from "@/components/chat/artifact";
+type PersistedDocumentKind = "text" | "code" | "image" | "sheet";
 import type { VisibilityType } from "@/components/chat/visibility-selector";
 import { ChatbotError } from "../errors";
 import { generateUUID } from "../utils";
@@ -27,6 +27,8 @@ import {
   type Suggestion,
   stream,
   suggestion,
+  type Patient,
+  patient,
   type User,
   user,
   vote,
@@ -325,7 +327,7 @@ export async function saveDocument({
 }: {
   id: string;
   title: string;
-  kind: ArtifactKind;
+  kind: PersistedDocumentKind;
   content: string;
   userId: string;
 }) {
@@ -627,6 +629,116 @@ export async function getStreamIdsByChatId({ chatId }: { chatId: string }) {
     throw new ChatbotError(
       "bad_request:database",
       "Failed to get stream ids by chat id"
+    );
+  }
+}
+
+export async function getPatientsByUserId({ userId }: { userId: string }) {
+  try {
+    return await db
+      .select()
+      .from(patient)
+      .where(eq(patient.userId, userId))
+      .orderBy(desc(patient.updatedAt));
+  } catch (_error) {
+    throw new ChatbotError(
+      "bad_request:database",
+      "Failed to get patients by user id"
+    );
+  }
+}
+
+export async function getPatientById({ id }: { id: string }) {
+  try {
+    const [selectedPatient] = await db
+      .select()
+      .from(patient)
+      .where(eq(patient.id, id))
+      .limit(1);
+
+    return selectedPatient ?? null;
+  } catch (_error) {
+    throw new ChatbotError(
+      "bad_request:database",
+      "Failed to get patient by id"
+    );
+  }
+}
+
+export async function createPatient({
+  userId,
+  name,
+  summary,
+  setupComplete,
+  profile,
+  intakeMessages,
+  consultMessages,
+}: {
+  userId: string;
+  name?: string;
+  summary?: string;
+  setupComplete?: boolean;
+  profile?: string;
+  intakeMessages?: string;
+  consultMessages?: string;
+}) {
+  try {
+    const [createdPatient] = await db
+      .insert(patient)
+      .values({
+        userId,
+        name: name ?? "New patient",
+        summary: summary ?? "",
+        setupComplete: setupComplete ?? false,
+        profile: profile ?? "{}",
+        intakeMessages: intakeMessages ?? "[]",
+        consultMessages: consultMessages ?? "[]",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .returning();
+
+    return createdPatient;
+  } catch (_error) {
+    throw new ChatbotError("bad_request:database", "Failed to create patient");
+  }
+}
+
+export async function updatePatientById({
+  id,
+  userId,
+  updates,
+}: {
+  id: string;
+  userId: string;
+  updates: Partial<Pick<Patient, "name" | "summary" | "setupComplete" | "profile" | "intakeMessages" | "consultMessages">>;
+}) {
+  try {
+    const [updatedPatient] = await db
+      .update(patient)
+      .set({
+        ...updates,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(patient.id, id), eq(patient.userId, userId)))
+      .returning();
+
+    return updatedPatient ?? null;
+  } catch (_error) {
+    throw new ChatbotError(
+      "bad_request:database",
+      "Failed to update patient by id"
+    );
+  }
+}
+
+export async function deletePatientsByUserId({ userId }: { userId: string }) {
+  try {
+    return await db.delete(patient).where(eq(patient.userId, userId));
+  } catch (_error) {
+    throw new ChatbotError(
+      "bad_request:database",
+      "Failed to delete patients by user id"
     );
   }
 }

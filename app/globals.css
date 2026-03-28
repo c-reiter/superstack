@@ -382,7 +382,7 @@ textarea:focus-visible {
 }
 
 .cm-editor {
-  @apply bg-transparent! outline-hidden! text-[13px]! leading-[1.6]!;
+  @apply bg-transparent! outline-hidden! text-sm! leading-[1.6]!;
   font-family:
     "SF Mono", "Cascadia Code", "Fira Code", "JetBrains Mono", ui-monospace,
     monospace !important;

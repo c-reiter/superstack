@@ -27,10 +27,12 @@ import { ImageEditor } from "./image-editor";
 import { SpreadsheetEditor } from "./sheet-editor";
 import { Editor } from "./text-editor";
 
+type PreviewArtifactKind = Exclude<ArtifactKind, "graph">;
+
 type DocumentToolOutput = {
   id: string;
   title: string;
-  kind: ArtifactKind;
+  kind: PreviewArtifactKind;
   content?: string;
 };
 
@@ -76,7 +78,10 @@ export function DocumentPreview({
   }, [artifact.documentId, setArtifact]);
 
   if (isDocumentsFetching) {
-    const kind = result?.kind ?? args?.kind ?? artifact.kind;
+    const kind =
+      result?.kind ??
+      args?.kind ??
+      (artifact.kind === "graph" ? "text" : artifact.kind);
     const title = result?.title ?? args?.title ?? artifact.title;
 
     return (
@@ -101,7 +106,7 @@ export function DocumentPreview({
 
   const document: Document | null = previewDocument
     ? previewDocument
-    : artifact.status === "streaming"
+    : artifact.status === "streaming" && artifact.kind !== "graph"
       ? {
           title: artifact.title,
           kind: artifact.kind,
@@ -113,7 +118,7 @@ export function DocumentPreview({
       : null;
 
   if (!document) {
-    return <LoadingSkeleton artifactKind={artifact.kind} />;
+    return <LoadingSkeleton artifactKind={artifact.kind === "graph" ? "text" : artifact.kind} />;
   }
 
   return (
@@ -133,7 +138,7 @@ export function DocumentPreview({
   );
 }
 
-const LoadingSkeleton = ({ artifactKind }: { artifactKind: ArtifactKind }) => (
+const LoadingSkeleton = ({ artifactKind }: { artifactKind: PreviewArtifactKind }) => (
   <div className="w-full max-w-[450px]">
     <div className="flex flex-row items-center justify-between gap-2 rounded-t-2xl border border-b-0 border-border/50 px-4 py-3 dark:bg-muted">
       <div className="flex flex-row items-center gap-2.5">
@@ -216,7 +221,7 @@ const PureDocumentHeader = ({
   isStreaming,
 }: {
   title: string;
-  kind: ArtifactKind;
+  kind: PreviewArtifactKind;
   isStreaming: boolean;
 }) => (
   <div className="flex flex-row items-center justify-between gap-2 rounded-t-2xl border border-b-0 border-border/50 px-4 py-3 dark:bg-muted">

@@ -111,7 +111,7 @@ export function SlashCommandMenu({
             <div className="flex size-6 shrink-0 items-center justify-center text-muted-foreground/60">
               {cmd.icon}
             </div>
-            <span className="font-mono text-[13px] text-foreground">
+            <span className="font-mono text-sm text-foreground">
               /{cmd.name}
             </span>
             <span className="text-[12px] text-muted-foreground/50">

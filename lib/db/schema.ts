@@ -134,3 +134,20 @@ export const stream = pgTable(
 );
 
 export type Stream = InferSelectModel<typeof stream>;
+
+export const patient = pgTable("Patient", {
+  id: uuid("id").primaryKey().notNull().defaultRandom(),
+  userId: uuid("userId")
+    .notNull()
+    .references(() => user.id),
+  name: text("name").notNull().default("New patient"),
+  summary: text("summary").notNull().default(""),
+  setupComplete: boolean("setupComplete").notNull().default(false),
+  profile: text("profile").notNull().default("{}"),
+  intakeMessages: text("intakeMessages").notNull().default("[]"),
+  consultMessages: text("consultMessages").notNull().default("[]"),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+  updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+});
+
+export type Patient = InferSelectModel<typeof patient>;

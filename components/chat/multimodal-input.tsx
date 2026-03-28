@@ -10,6 +10,7 @@ import {
   type ChangeEvent,
   type Dispatch,
   memo,
+  type ReactNode,
   type SetStateAction,
   useCallback,
   useEffect,
@@ -57,6 +58,9 @@ function PureMultimodalInput({
   editingMessage,
   onCancelEdit,
   isLoading,
+  placeholder,
+  showSuggestedActions = true,
+  topSlot,
 }: {
   chatId: string;
   input: string;
@@ -76,6 +80,9 @@ function PureMultimodalInput({
   editingMessage?: ChatMessage | null;
   onCancelEdit?: () => void;
   isLoading?: boolean;
+  placeholder?: string;
+  showSuggestedActions?: boolean;
+  topSlot?: ReactNode;
 }) {
   const router = useRouter();
   const { setTheme, resolvedTheme } = useTheme();
@@ -349,7 +356,8 @@ function PureMultimodalInput({
         </div>
       )}
 
-      {!editingMessage &&
+      {showSuggestedActions &&
+        !editingMessage &&
         !isLoading &&
         messages.length === 0 &&
         attachments.length === 0 &&
@@ -381,28 +389,34 @@ function PureMultimodalInput({
         )}
       </div>
 
-      <PromptInput
-        className="[&>div]:rounded-2xl [&>div]:border [&>div]:border-border/30 [&>div]:bg-card/70 [&>div]:shadow-[var(--shadow-composer)] [&>div]:transition-shadow [&>div]:duration-300 [&>div]:focus-within:shadow-[var(--shadow-composer-focus)]"
-        onSubmit={() => {
-          if (input.startsWith("/")) {
-            const query = input.slice(1).trim();
-            const cmd = slashCommands.find((c) => c.name === query);
-            if (cmd) {
-              handleSlashSelect(cmd);
+      <div className="flex flex-col">
+        <PromptInput
+          className={cn(
+            "[&>div]:border [&>div]:border-border/30 [&>div]:bg-card/70 [&>div]:shadow-[var(--shadow-composer)] [&>div]:transition-shadow [&>div]:duration-300 [&>div]:focus-within:shadow-[var(--shadow-composer-focus)]",
+            topSlot
+              ? "[&>div]:rounded-t-2xl [&>div]:rounded-b-none [&>div]:border-b-0"
+              : "[&>div]:rounded-2xl"
+          )}
+          onSubmit={() => {
+            if (input.startsWith("/")) {
+              const query = input.slice(1).trim();
+              const cmd = slashCommands.find((c) => c.name === query);
+              if (cmd) {
+                handleSlashSelect(cmd);
+              }
+              return;
             }
-            return;
-          }
-          if (!input.trim() && attachments.length === 0) {
-            return;
-          }
-          if (status === "ready" || status === "error") {
-            submitForm();
-          } else {
-            toast.error("Please wait for the model to finish its response!");
-          }
-        }}
-      >
-        {(attachments.length > 0 || uploadQueue.length > 0) && (
+            if (!input.trim() && attachments.length === 0) {
+              return;
+            }
+            if (status === "ready" || status === "error") {
+              submitForm();
+            } else {
+              toast.error("Please wait for the model to finish its response!");
+            }
+          }}
+        >
+          {(attachments.length > 0 || uploadQueue.length > 0) && (
           <div
             className="flex w-full self-start flex-row gap-2 overflow-x-auto px-3 pt-3 no-scrollbar"
             data-testid="attachments-preview"
@@ -436,7 +450,7 @@ function PureMultimodalInput({
           </div>
         )}
         <PromptInputTextarea
-          className="min-h-24 text-[13px] leading-relaxed px-4 pt-3.5 pb-1.5 placeholder:text-muted-foreground/35"
+          className="min-h-24 px-4 pt-3.5 pb-1.5 text-[15px] leading-7 placeholder:text-muted-foreground/35"
           data-testid="multimodal-input"
           onChange={handleInput}
           onKeyDown={(e) => {
@@ -473,7 +487,9 @@ function PureMultimodalInput({
             }
           }}
           placeholder={
-            editingMessage ? "Edit your message..." : "Ask anything..."
+            editingMessage
+              ? "Edit your message..."
+              : (placeholder ?? "Ask anything...")
           }
           ref={textareaRef}
           value={input}
@@ -507,6 +523,13 @@ function PureMultimodalInput({
           )}
         </PromptInputFooter>
       </PromptInput>
+
+        {topSlot && (
+          <div className="mx-auto w-fit max-w-full rounded-b-2xl border border-border/30 border-t-0 bg-card/80 px-4 py-2 text-center">
+            {topSlot}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -536,6 +559,15 @@ export const MultimodalInput = memo(
       return false;
     }
     if (prevProps.messages.length !== nextProps.messages.length) {
+      return false;
+    }
+    if (prevProps.placeholder !== nextProps.placeholder) {
+      return false;
+    }
+    if (prevProps.showSuggestedActions !== nextProps.showSuggestedActions) {
+      return false;
+    }
+    if (prevProps.topSlot !== nextProps.topSlot) {
       return false;
     }
 

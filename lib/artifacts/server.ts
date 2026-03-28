@@ -8,10 +8,12 @@ import { saveDocument } from "../db/queries";
 import type { Document } from "../db/schema";
 import type { ChatMessage } from "../types";
 
+type PersistedArtifactKind = Exclude<ArtifactKind, "graph">;
+
 export type SaveDocumentProps = {
   id: string;
   title: string;
-  kind: ArtifactKind;
+  kind: PersistedArtifactKind;
   content: string;
   userId: string;
 };
@@ -32,13 +34,13 @@ export type UpdateDocumentCallbackProps = {
   modelId: string;
 };
 
-export type DocumentHandler<T = ArtifactKind> = {
+export type DocumentHandler<T = PersistedArtifactKind> = {
   kind: T;
   onCreateDocument: (args: CreateDocumentCallbackProps) => Promise<void>;
   onUpdateDocument: (args: UpdateDocumentCallbackProps) => Promise<void>;
 };
 
-export function createDocumentHandler<T extends ArtifactKind>(config: {
+export function createDocumentHandler<T extends PersistedArtifactKind>(config: {
   kind: T;
   onCreateDocument: (params: CreateDocumentCallbackProps) => Promise<string>;
   onUpdateDocument: (params: UpdateDocumentCallbackProps) => Promise<string>;

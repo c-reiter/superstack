@@ -111,7 +111,7 @@ export function Console({ consoleOutputs, setConsoleOutputs }: ConsoleProps) {
         style={{ height }}
       >
         <div className="sticky top-0 z-50 flex h-10 w-full items-center justify-between border-b border-border/50 bg-background px-3">
-          <div className="flex items-center gap-2.5 text-[13px] text-muted-foreground">
+          <div className="flex items-center gap-2.5 text-sm text-muted-foreground">
             <TerminalWindowIcon />
             <span>Console</span>
           </div>

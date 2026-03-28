@@ -14,6 +14,7 @@ import {
 import useSWR, { useSWRConfig } from "swr";
 import { useWindowSize } from "usehooks-ts";
 import { codeArtifact } from "@/artifacts/code/client";
+import { graphArtifact } from "@/artifacts/graph/client";
 import { imageArtifact } from "@/artifacts/image/client";
 import { sheetArtifact } from "@/artifacts/sheet/client";
 import { textArtifact } from "@/artifacts/text/client";
@@ -34,6 +35,7 @@ export const artifactDefinitions = [
   codeArtifact,
   imageArtifact,
   sheetArtifact,
+  graphArtifact,
 ];
 export type ArtifactKind = (typeof artifactDefinitions)[number]["kind"];
 
@@ -89,12 +91,17 @@ function PureArtifact({
 }) {
   const { artifact, setArtifact, metadata, setMetadata } = useArtifact();
 
+  const shouldFetchDocuments =
+    artifact.kind !== "graph" &&
+    artifact.documentId !== "init" &&
+    artifact.status !== "streaming";
+
   const {
     data: documents,
     isLoading: isDocumentsFetching,
     mutate: mutateDocuments,
   } = useSWR<Document[]>(
-    artifact.documentId !== "init" && artifact.status !== "streaming"
+    shouldFetchDocuments
       ? `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/document?id=${artifact.documentId}`
       : null,
     fetcher
@@ -142,8 +149,10 @@ function PureArtifact({
   }, [documents, setArtifact, artifact.status, isContentDirty]);
 
   useEffect(() => {
-    mutateDocuments();
-  }, [mutateDocuments]);
+    if (shouldFetchDocuments) {
+      mutateDocuments();
+    }
+  }, [mutateDocuments, shouldFetchDocuments]);
 
   const { mutate } = useSWRConfig();
 
@@ -264,6 +273,8 @@ function PureArtifact({
       ? currentVersionIndex === documents.length - 1
       : true;
 
+  const supportsVersioning = artifact.kind !== "graph";
+
   const { width: windowWidth, height: windowHeight } = useWindowSize();
   const isMobile = windowWidth ? windowWidth < 768 : false;
 
@@ -308,7 +319,7 @@ function PureArtifact({
   const artifactPanel = (
     <>
       {sidebarState !== "collapsed" && (
-        <div className="flex h-[calc(3.5rem+1px)] shrink-0 items-center justify-between border-b border-border/50 px-4">
+        <div className="flex h-[calc(3.5rem+1px)] shrink-0 items-center justify-between border-b border-border/50 px-4 md:border-t md:border-l md:border-border/40">
           <div className="flex items-center gap-3">
             <ArtifactCloseButton />
             <div className="flex flex-col gap-0.5">
@@ -335,7 +346,7 @@ function PureArtifact({
                 ) : (
                   <div className="h-3 w-24 animate-pulse rounded bg-muted-foreground/10" />
                 )}
-                {documents && documents.length > 1 && (
+                {supportsVersioning && documents && documents.length > 1 && (
                   <div className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-muted-foreground">
                     v{currentVersionIndex + 1}/{documents.length}
                   </div>
@@ -379,7 +390,7 @@ function PureArtifact({
           title={artifact.title}
         />
         <AnimatePresence>
-          {isCurrentVersion && (
+          {isCurrentVersion && supportsVersioning && (
             <Toolbar
               artifactActions={
                 <ArtifactActions
@@ -409,7 +420,7 @@ function PureArtifact({
         </AnimatePresence>
       </div>
       <AnimatePresence>
-        {!isCurrentVersion && (
+        {supportsVersioning && !isCurrentVersion && (
           <VersionFooter
             currentVersionIndex={currentVersionIndex}
             documents={documents}

@@ -116,7 +116,7 @@ const PurePreviewMessage = ({
     if (type === "text") {
       return (
         <MessageContent
-          className={cn("text-[13px] leading-[1.65]", {
+          className={cn("text-[15px] leading-7", {
             "w-fit max-w-[min(80%,56ch)] overflow-hidden break-words rounded-2xl rounded-br-lg border border-border/30 bg-gradient-to-br from-secondary to-muted px-3.5 py-2 shadow-[var(--shadow-card)]":
               message.role === "user",
           })}
@@ -301,6 +301,39 @@ const PurePreviewMessage = ({
       );
     }
 
+    if (type === "tool-createGraph") {
+      const { toolCallId, state } = part;
+
+      return (
+        <Tool
+          className="w-[min(100%,420px)]"
+          defaultOpen={true}
+          key={toolCallId}
+        >
+          <ToolHeader state={state} type="tool-createGraph" />
+          <ToolContent>
+            {state === "input-available" && <ToolInput input={part.input} />}
+            {state === "output-available" && (
+              <ToolOutput
+                errorText={undefined}
+                output={
+                  "error" in part.output ? (
+                    <div className="rounded border p-2 text-red-500">
+                      Error: {String(part.output.error)}
+                    </div>
+                  ) : (
+                    <div className="rounded-2xl border border-border/50 bg-card/50 p-3 text-sm text-muted-foreground">
+                      Opened graph: <span className="font-medium text-foreground">{part.output.title}</span>
+                    </div>
+                  )
+                }
+              />
+            )}
+          </ToolContent>
+        </Tool>
+      );
+    }
+
     return null;
   });
 
@@ -316,7 +349,7 @@ const PurePreviewMessage = ({
   );
 
   const content = isThinking ? (
-    <div className="flex h-[calc(13px*1.65)] items-center text-[13px] leading-[1.65]">
+    <div className="flex h-7 items-center text-[15px] leading-7">
       <Shimmer className="font-medium" duration={1}>
         Thinking...
       </Shimmer>
@@ -344,7 +377,7 @@ const PurePreviewMessage = ({
         )}
       >
         {isAssistant && (
-          <div className="flex h-[calc(13px*1.65)] shrink-0 items-center">
+          <div className="flex h-7 shrink-0 items-center">
             <div className="flex size-7 items-center justify-center rounded-lg bg-muted/60 text-muted-foreground ring-1 ring-border/50">
               <SparklesIcon size={13} />
             </div>
@@ -370,13 +403,13 @@ export const ThinkingMessage = () => {
       data-testid="message-assistant-loading"
     >
       <div className="flex items-start gap-3">
-        <div className="flex h-[calc(13px*1.65)] shrink-0 items-center">
+        <div className="flex h-7 shrink-0 items-center">
           <div className="flex size-7 items-center justify-center rounded-lg bg-muted/60 text-muted-foreground ring-1 ring-border/50">
             <SparklesIcon size={13} />
           </div>
         </div>
 
-        <div className="flex h-[calc(13px*1.65)] items-center text-[13px] leading-[1.65]">
+        <div className="flex h-7 items-center text-[15px] leading-7">
           <Shimmer className="font-medium" duration={1}>
             Thinking...
           </Shimmer>
