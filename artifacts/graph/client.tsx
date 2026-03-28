@@ -96,6 +96,10 @@ const MIN_ZOOM = 0.8;
 const MAX_ZOOM = 3.5;
 const WHEEL_ZOOM_SENSITIVITY = 0.0085;
 const GESTURE_ZOOM_DAMPING = 1.9;
+const CLUSTER_COLUMN_GAP = 220;
+const CLUSTER_ROW_GAP = 84;
+const CLUSTER_NODE_GAP = 28;
+const CLUSTER_GROUP_GAP = 72;
 
 function estimateLineCount(text: string | undefined, charsPerLine: number) {
   if (!text) {
@@ -133,10 +137,6 @@ function hashString(value: string) {
   }
 
   return hash;
-}
-
-function getDeterministicUnit(value: string) {
-  return (hashString(value) % 10_000) / 10_000;
 }
 
 function getConnectedComponents(
@@ -292,36 +292,204 @@ function splitComponentIntoClusters(
   return [...clusters.values()].filter((cluster) => cluster.length > 0);
 }
 
-function getClusterAnchors(
-  clusterCount: number,
-  centerX: number,
-  centerY: number
+type ClusterLayout = {
+  nodes: PositionedNode[];
+  width: number;
+  height: number;
+  minX: number;
+  minY: number;
+};
+
+function getClusterRoot(
+  cluster: PositionedNode[],
+  neighborMap: Map<string, Set<string>>
 ) {
-  if (clusterCount === 0) {
-    return [] as Point[];
+  return [...cluster].sort((a, b) => {
+    return (
+      getNodeDegree(b.id, neighborMap) - getNodeDegree(a.id, neighborMap) ||
+      hashString(a.id) - hashString(b.id) ||
+      a.label.localeCompare(b.label)
+    );
+  })[0];
+}
+
+function getClusterLevelMap(
+  cluster: PositionedNode[],
+  neighborMap: Map<string, Set<string>>
+) {
+  const clusterIds = new Set(cluster.map((node) => node.id));
+  const root = getClusterRoot(cluster, neighborMap);
+  const levelMap = new Map<string, number>();
+  const queue = [root.id];
+  levelMap.set(root.id, 0);
+
+  while (queue.length > 0) {
+    const currentId = queue.shift();
+    if (!currentId) {
+      continue;
+    }
+
+    const currentLevel = levelMap.get(currentId) ?? 0;
+
+    for (const neighborId of neighborMap.get(currentId) ?? []) {
+      if (!clusterIds.has(neighborId) || levelMap.has(neighborId)) {
+        continue;
+      }
+
+      levelMap.set(neighborId, currentLevel + 1);
+      queue.push(neighborId);
+    }
   }
 
-  if (clusterCount === 1) {
-    return [{ x: centerX, y: centerY }];
+  return levelMap;
+}
+
+function layoutClusterHorizontally(
+  cluster: PositionedNode[],
+  neighborMap: Map<string, Set<string>>
+): ClusterLayout {
+  if (cluster.length === 1) {
+    const node = cluster[0];
+    node.x = NODE_WIDTH / 2;
+    node.y = node.height / 2;
+
+    return {
+      nodes: cluster,
+      width: NODE_WIDTH,
+      height: node.height,
+      minX: 0,
+      minY: 0,
+    };
   }
 
-  const anchors: Point[] = [{ x: centerX, y: centerY }];
+  const levelMap = getClusterLevelMap(cluster, neighborMap);
+  const maxLevel = Math.max(...levelMap.values(), 0);
+  const columns = Array.from(
+    { length: maxLevel + 1 },
+    () => [] as PositionedNode[]
+  );
 
-  for (let index = 1; index < clusterCount; index += 1) {
-    const ring = Math.floor((index - 1) / 6) + 1;
-    const positionInRing = (index - 1) % 6;
-    const ringCount = Math.min(clusterCount - anchors.length, 6);
-    const angle = (positionInRing / ringCount) * Math.PI * 2 - Math.PI / 2;
-    const radiusX = 250 + (ring - 1) * 170;
-    const radiusY = 170 + (ring - 1) * 120;
+  for (const node of cluster) {
+    const level = levelMap.get(node.id) ?? 0;
+    columns[level]?.push(node);
+  }
 
-    anchors.push({
-      x: centerX + Math.cos(angle) * radiusX,
-      y: centerY + Math.sin(angle) * radiusY,
+  const getNodeOrder = (column: PositionedNode[]) => {
+    return new Map(column.map((node, index) => [node.id, index]));
+  };
+
+  for (const column of columns) {
+    column.sort((a, b) => {
+      return (
+        getNodeDegree(b.id, neighborMap) - getNodeDegree(a.id, neighborMap) ||
+        a.label.localeCompare(b.label)
+      );
     });
   }
 
-  return anchors;
+  for (let iteration = 0; iteration < 6; iteration += 1) {
+    for (let columnIndex = 1; columnIndex < columns.length; columnIndex += 1) {
+      const previousOrder = getNodeOrder(columns[columnIndex - 1] ?? []);
+      columns[columnIndex]?.sort((a, b) => {
+        const getBarycenter = (node: PositionedNode) => {
+          const neighbors = [...(neighborMap.get(node.id) ?? [])]
+            .filter(
+              (neighborId) =>
+                (levelMap.get(neighborId) ?? 0) === columnIndex - 1
+            )
+            .map((neighborId) => previousOrder.get(neighborId))
+            .filter((value): value is number => value !== undefined);
+
+          if (neighbors.length === 0) {
+            return Number.POSITIVE_INFINITY;
+          }
+
+          return (
+            neighbors.reduce((sum, value) => sum + value, 0) / neighbors.length
+          );
+        };
+
+        return (
+          getBarycenter(a) - getBarycenter(b) ||
+          getNodeDegree(b.id, neighborMap) - getNodeDegree(a.id, neighborMap) ||
+          a.label.localeCompare(b.label)
+        );
+      });
+    }
+
+    for (
+      let columnIndex = columns.length - 2;
+      columnIndex >= 0;
+      columnIndex -= 1
+    ) {
+      const nextOrder = getNodeOrder(columns[columnIndex + 1] ?? []);
+      columns[columnIndex]?.sort((a, b) => {
+        const getBarycenter = (node: PositionedNode) => {
+          const neighbors = [...(neighborMap.get(node.id) ?? [])]
+            .filter(
+              (neighborId) =>
+                (levelMap.get(neighborId) ?? 0) === columnIndex + 1
+            )
+            .map((neighborId) => nextOrder.get(neighborId))
+            .filter((value): value is number => value !== undefined);
+
+          if (neighbors.length === 0) {
+            return Number.POSITIVE_INFINITY;
+          }
+
+          return (
+            neighbors.reduce((sum, value) => sum + value, 0) / neighbors.length
+          );
+        };
+
+        return (
+          getBarycenter(a) - getBarycenter(b) ||
+          getNodeDegree(b.id, neighborMap) - getNodeDegree(a.id, neighborMap) ||
+          a.label.localeCompare(b.label)
+        );
+      });
+    }
+  }
+
+  const columnGap =
+    maxLevel === 0
+      ? 0
+      : clamp(
+          (Math.min(VIRTUAL_WIDTH - 220, 760) - NODE_WIDTH) / maxLevel,
+          170,
+          CLUSTER_COLUMN_GAP
+        );
+
+  let minX = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let minY = Number.POSITIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
+
+  columns.forEach((column, columnIndex) => {
+    const columnHeight =
+      column.reduce((sum, node) => sum + node.height, 0) +
+      Math.max(0, column.length - 1) * CLUSTER_NODE_GAP;
+    let cursorY = -columnHeight / 2;
+
+    for (const node of column) {
+      node.x = NODE_WIDTH / 2 + columnIndex * columnGap;
+      node.y = cursorY + node.height / 2;
+      cursorY += node.height + CLUSTER_NODE_GAP;
+
+      minX = Math.min(minX, node.x - NODE_WIDTH / 2);
+      maxX = Math.max(maxX, node.x + NODE_WIDTH / 2);
+      minY = Math.min(minY, node.y - node.height / 2);
+      maxY = Math.max(maxY, node.y + node.height / 2);
+    }
+  });
+
+  return {
+    nodes: cluster,
+    width: maxX - minX,
+    height: maxY - minY,
+    minX,
+    minY,
+  };
 }
 
 function resolveNodeOverlaps(nodes: PositionedNode[]) {
@@ -384,308 +552,103 @@ function positionNodes(graph: PatientGraph) {
   }
 
   const components = getConnectedComponents(nodes, neighborMap).sort((a, b) => {
-    const edgeWeightA = a.reduce(
-      (sum, node) => sum + (neighborMap.get(node.id)?.size ?? 0),
-      0
-    );
-    const edgeWeightB = b.reduce(
-      (sum, node) => sum + (neighborMap.get(node.id)?.size ?? 0),
-      0
-    );
-
-    return edgeWeightB - edgeWeightA || b.length - a.length;
-  });
-
-  const centerX = VIRTUAL_WIDTH / 2;
-  const centerY = MIN_GRAPH_HEIGHT / 2;
-  const isolatedNodes: PositionedNode[] = [];
-  const connectedClusters = components
-    .filter((component) => {
-      if (component.length === 1) {
-        const node = component[0];
-        if ((neighborMap.get(node.id)?.size ?? 0) === 0) {
-          isolatedNodes.push(node);
-          return false;
-        }
-      }
-
-      return true;
-    })
-    .flatMap((component) => splitComponentIntoClusters(component, neighborMap))
-    .sort((a, b) => {
-      const score = (cluster: PositionedNode[]) =>
-        cluster.reduce(
-          (sum, node) => sum + getNodeDegree(node.id, neighborMap),
-          0
-        );
-
-      return score(b) - score(a) || b.length - a.length;
-    });
-
-  const clusterAnchors = getClusterAnchors(
-    connectedClusters.length,
-    centerX,
-    centerY
-  );
-
-  connectedClusters.forEach((cluster, clusterIndex) => {
-    const anchor = clusterAnchors[clusterIndex] ?? { x: centerX, y: centerY };
-    const sortedNodes = [...cluster].sort((a, b) => {
-      const degreeDiff =
-        getNodeDegree(b.id, neighborMap) - getNodeDegree(a.id, neighborMap);
-      return degreeDiff || a.label.localeCompare(b.label);
-    });
-
-    sortedNodes.forEach((node, nodeIndex) => {
-      if (nodeIndex === 0) {
-        node.x = anchor.x;
-        node.y = anchor.y;
-        return;
-      }
-
-      const ring = Math.floor((nodeIndex - 1) / 4) + 1;
-      const nodesInRing = 4 + Math.max(0, ring - 1) * 2;
-      const indexInRing = (nodeIndex - 1) % nodesInRing;
-      const angleOffset =
-        getDeterministicUnit(`${clusterIndex}:${node.id}`) * Math.PI * 2;
-      const angle = angleOffset + (indexInRing / nodesInRing) * Math.PI * 2;
-      const radius = 120 + ring * 75;
-
-      node.x = anchor.x + Math.cos(angle) * radius;
-      node.y = anchor.y + Math.sin(angle) * radius * 0.72;
-    });
-  });
-
-  isolatedNodes.forEach((node, index) => {
-    const angle = (index / Math.max(isolatedNodes.length, 1)) * Math.PI * 2;
-    const radius = Math.max(320, 260 + isolatedNodes.length * 14);
-
-    node.x = centerX + Math.cos(angle) * radius;
-    node.y = centerY + Math.sin(angle) * radius * 0.72;
-  });
-
-  const connectedSet = new Set(
-    connectedClusters.flatMap((cluster) => cluster.map((node) => node.id))
-  );
-
-  for (let iteration = 0; iteration < 220; iteration += 1) {
-    const forces = new Map<string, Point>(
-      nodes.map((node) => [node.id, { x: 0, y: 0 }])
-    );
-
-    for (let index = 0; index < nodes.length; index += 1) {
-      for (
-        let otherIndex = index + 1;
-        otherIndex < nodes.length;
-        otherIndex += 1
-      ) {
-        const node = nodes[index];
-        const other = nodes[otherIndex];
-        let dx = other.x - node.x;
-        let dy = other.y - node.y;
-
-        if (dx === 0 && dy === 0) {
-          const jitterAngle =
-            getDeterministicUnit(`${node.id}:${other.id}`) * Math.PI * 2;
-          dx = Math.cos(jitterAngle) * 0.01;
-          dy = Math.sin(jitterAngle) * 0.01;
-        }
-
-        const distance = Math.hypot(dx, dy);
-        const desiredX = NODE_WIDTH + 44;
-        const desiredY = (node.height + other.height) / 2 + 36;
-        const overlapX = desiredX - Math.abs(dx);
-        const overlapY = desiredY - Math.abs(dy);
-        const forceA = forces.get(node.id);
-        const forceB = forces.get(other.id);
-
-        if (!forceA || !forceB) {
-          continue;
-        }
-
-        if (overlapX > 0 && overlapY > 0) {
-          const pushX = (overlapX / Math.max(distance, 1)) * 0.22;
-          const pushY = (overlapY / Math.max(distance, 1)) * 0.22;
-          const signX = dx >= 0 ? 1 : -1;
-          const signY = dy >= 0 ? 1 : -1;
-
-          forceA.x -= signX * pushX;
-          forceB.x += signX * pushX;
-          forceA.y -= signY * pushY;
-          forceB.y += signY * pushY;
-          continue;
-        }
-
-        const repulsion = 18_000 / Math.max(distance * distance, 1200);
-        const unitX = dx / Math.max(distance, 1);
-        const unitY = dy / Math.max(distance, 1);
-
-        forceA.x -= unitX * repulsion;
-        forceA.y -= unitY * repulsion;
-        forceB.x += unitX * repulsion;
-        forceB.y += unitY * repulsion;
-      }
-    }
-
-    for (const edge of graph.edges) {
-      const source = nodesById.get(edge.source);
-      const target = nodesById.get(edge.target);
-
-      if (!source || !target) {
-        continue;
-      }
-
-      const dx = target.x - source.x;
-      const dy = target.y - source.y;
-      const distance = Math.max(Math.hypot(dx, dy), 1);
-      const idealDistance =
-        170 + Math.abs(source.height - target.height) * 0.12;
-      const spring = (distance - idealDistance) * 0.05;
-      const unitX = dx / distance;
-      const unitY = dy / distance;
-      const sourceForce = forces.get(source.id);
-      const targetForce = forces.get(target.id);
-
-      if (!sourceForce || !targetForce) {
-        continue;
-      }
-
-      sourceForce.x += unitX * spring;
-      sourceForce.y += unitY * spring;
-      targetForce.x -= unitX * spring;
-      targetForce.y -= unitY * spring;
-    }
-
-    connectedClusters.forEach((cluster, clusterIndex) => {
-      const anchor = clusterAnchors[clusterIndex] ?? { x: centerX, y: centerY };
-      const centroid = cluster.reduce(
-        (sum, node) => ({ x: sum.x + node.x, y: sum.y + node.y }),
-        { x: 0, y: 0 }
+    const score = (component: PositionedNode[]) =>
+      component.reduce(
+        (sum, node) => sum + getNodeDegree(node.id, neighborMap),
+        0
       );
-      const centroidX = centroid.x / cluster.length;
-      const centroidY = centroid.y / cluster.length;
 
-      for (const node of cluster) {
-        const force = forces.get(node.id);
-        if (!force) {
-          continue;
-        }
+    return score(b) - score(a) || b.length - a.length;
+  });
 
-        force.x +=
-          (anchor.x - centroidX) * 0.012 + (centroidX - node.x) * 0.014;
-        force.y +=
-          (anchor.y - centroidY) * 0.012 + (centroidY - node.y) * 0.014;
-      }
-    });
+  const connectedClusterLayouts = components
+    .filter(
+      (component) =>
+        component.length > 1 ||
+        getNodeDegree(component[0]?.id ?? "", neighborMap) > 0
+    )
+    .flatMap((component) => splitComponentIntoClusters(component, neighborMap))
+    .map((cluster) => layoutClusterHorizontally(cluster, neighborMap))
+    .sort(
+      (a, b) =>
+        b.width * b.height - a.width * a.height ||
+        b.nodes.length - a.nodes.length
+    );
 
-    for (let index = 0; index < connectedClusters.length; index += 1) {
-      for (
-        let otherIndex = index + 1;
-        otherIndex < connectedClusters.length;
-        otherIndex += 1
-      ) {
-        const cluster = connectedClusters[index];
-        const otherCluster = connectedClusters[otherIndex];
-        const centroid = cluster.reduce(
-          (sum, node) => ({ x: sum.x + node.x, y: sum.y + node.y }),
-          { x: 0, y: 0 }
-        );
-        const otherCentroid = otherCluster.reduce(
-          (sum, node) => ({ x: sum.x + node.x, y: sum.y + node.y }),
-          { x: 0, y: 0 }
-        );
-        const centerA = {
-          x: centroid.x / cluster.length,
-          y: centroid.y / cluster.length,
-        };
-        const centerB = {
-          x: otherCentroid.x / otherCluster.length,
-          y: otherCentroid.y / otherCluster.length,
-        };
-        const dx = centerB.x - centerA.x;
-        const dy = centerB.y - centerA.y;
-        const distance = Math.max(Math.hypot(dx, dy), 1);
-        const targetDistance =
-          260 + (cluster.length + otherCluster.length) * 12;
+  const isolatedLayouts = components
+    .filter(
+      (component) =>
+        component.length === 1 &&
+        getNodeDegree(component[0]?.id ?? "", neighborMap) === 0
+    )
+    .map((component) => layoutClusterHorizontally(component, neighborMap));
 
-        if (distance >= targetDistance) {
-          continue;
-        }
+  const clusterLayouts = [...connectedClusterLayouts, ...isolatedLayouts];
+  const canvasMinX = 40;
+  const canvasMaxX = VIRTUAL_WIDTH - 40;
+  const availableWidth = canvasMaxX - canvasMinX;
+  const rows: Array<{
+    layouts: ClusterLayout[];
+    width: number;
+    height: number;
+  }> = [];
+  let currentRow: { layouts: ClusterLayout[]; width: number; height: number } =
+    {
+      layouts: [],
+      width: 0,
+      height: 0,
+    };
 
-        const push = ((targetDistance - distance) / targetDistance) * 1.8;
-        const unitX = dx / distance;
-        const unitY = dy / distance;
+  for (const layout of clusterLayouts) {
+    const nextWidth =
+      currentRow.layouts.length === 0
+        ? layout.width
+        : currentRow.width + CLUSTER_GROUP_GAP + layout.width;
 
-        for (const node of cluster) {
-          const force = forces.get(node.id);
-          if (!force) {
-            continue;
-          }
-          force.x -= unitX * push;
-          force.y -= unitY * push;
-        }
-
-        for (const node of otherCluster) {
-          const force = forces.get(node.id);
-          if (!force) {
-            continue;
-          }
-          force.x += unitX * push;
-          force.y += unitY * push;
-        }
-      }
+    if (currentRow.layouts.length > 0 && nextWidth > availableWidth) {
+      rows.push(currentRow);
+      currentRow = {
+        layouts: [],
+        width: 0,
+        height: 0,
+      };
     }
 
-    for (const node of isolatedNodes) {
-      const force = forces.get(node.id);
-      if (!force) {
-        continue;
-      }
-
-      const angle = Math.atan2(node.y - centerY, node.x - centerX);
-      const targetRadius = Math.max(340, isolatedNodes.length * 20 + 300);
-      const targetX = centerX + Math.cos(angle) * targetRadius;
-      const targetY = centerY + Math.sin(angle) * targetRadius * 0.72;
-
-      force.x += (targetX - node.x) * 0.016;
-      force.y += (targetY - node.y) * 0.016;
-    }
-
-    for (const node of nodes) {
-      const force = forces.get(node.id);
-      if (!force) {
-        continue;
-      }
-
-      const gravityStrength = connectedSet.has(node.id) ? 0.006 : 0.002;
-      force.x += (centerX - node.x) * gravityStrength;
-      force.y += (centerY - node.y) * gravityStrength;
-
-      node.x += force.x;
-      node.y += force.y;
-    }
+    currentRow.layouts.push(layout);
+    currentRow.width =
+      currentRow.layouts.length === 1
+        ? layout.width
+        : currentRow.width + CLUSTER_GROUP_GAP + layout.width;
+    currentRow.height = Math.max(currentRow.height, layout.height);
   }
 
-  let minX = Number.POSITIVE_INFINITY;
-  let maxX = Number.NEGATIVE_INFINITY;
-  let minY = Number.POSITIVE_INFINITY;
-  let maxY = Number.NEGATIVE_INFINITY;
-
-  for (const node of nodes) {
-    minX = Math.min(minX, node.x - NODE_WIDTH / 2);
-    maxX = Math.max(maxX, node.x + NODE_WIDTH / 2);
-    minY = Math.min(minY, node.y - node.height / 2);
-    maxY = Math.max(maxY, node.y + node.height / 2);
+  if (currentRow.layouts.length > 0) {
+    rows.push(currentRow);
   }
 
-  const targetCenterX = VIRTUAL_WIDTH / 2;
-  const widthCenter = (minX + maxX) / 2;
-  const shiftX = targetCenterX - widthCenter;
-  const shiftY = 96 - minY;
+  let cursorY = 72;
+
+  for (const row of rows) {
+    let cursorX = canvasMinX + Math.max(0, (availableWidth - row.width) / 2);
+
+    for (const layout of row.layouts) {
+      const offsetX = cursorX - layout.minX;
+      const offsetY = cursorY + (row.height - layout.height) / 2 - layout.minY;
+
+      for (const node of layout.nodes) {
+        node.x += offsetX;
+        node.y += offsetY;
+      }
+
+      cursorX += layout.width + CLUSTER_GROUP_GAP;
+    }
+
+    cursorY += row.height + CLUSTER_ROW_GAP;
+  }
+
+  resolveNodeOverlaps(nodes);
 
   for (const node of nodes) {
-    node.x += shiftX;
-    node.y += shiftY;
     node.x = clamp(
       node.x,
       NODE_WIDTH / 2 + 40,
@@ -693,8 +656,6 @@ function positionNodes(graph: PatientGraph) {
     );
     node.y = Math.max(node.y, node.height / 2 + 40);
   }
-
-  resolveNodeOverlaps(nodes);
 
   const graphHeight = Math.max(
     MIN_GRAPH_HEIGHT,
