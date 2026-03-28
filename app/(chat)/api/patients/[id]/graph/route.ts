@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { auth } from "@/app/(auth)/auth";
+import { allowedModelIds, DEFAULT_CHAT_MODEL } from "@/lib/ai/models";
 import { generateCurrentPatientGraph } from "@/lib/ai/superstack-graph";
-import { DEFAULT_CHAT_MODEL, allowedModelIds } from "@/lib/ai/models";
 import { getPatientById } from "@/lib/db/queries";
 import { getHydratedPatient, savePatientRecord } from "@/lib/superstack/store";
 
@@ -41,8 +41,6 @@ export async function POST(
 
   const currentGraph = await generateCurrentPatientGraph({
     profile: patient.profile,
-    intakeMessages: patient.intakeMessages,
-    consultMessages: patient.consultMessages,
     modelId,
   });
 
