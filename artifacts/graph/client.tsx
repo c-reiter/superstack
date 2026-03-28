@@ -308,6 +308,17 @@ type ClusterLayout = {
   minY: number;
 };
 
+type NodeBounds = {
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
+  width: number;
+  height: number;
+  centerX: number;
+  centerY: number;
+};
+
 function getClusterRoot(
   cluster: PositionedNode[],
   neighborMap: Map<string, Set<string>>
@@ -500,6 +511,77 @@ function layoutClusterHorizontally(
   };
 }
 
+function getNodeBounds(nodes: PositionedNode[]): NodeBounds {
+  if (nodes.length === 0) {
+    return {
+      minX: VIRTUAL_WIDTH / 2 - NODE_WIDTH / 2,
+      maxX: VIRTUAL_WIDTH / 2 + NODE_WIDTH / 2,
+      minY: MIN_GRAPH_HEIGHT / 2 - NODE_BASE_HEIGHT / 2,
+      maxY: MIN_GRAPH_HEIGHT / 2 + NODE_BASE_HEIGHT / 2,
+      width: NODE_WIDTH,
+      height: NODE_BASE_HEIGHT,
+      centerX: VIRTUAL_WIDTH / 2,
+      centerY: MIN_GRAPH_HEIGHT / 2,
+    };
+  }
+
+  const minX = Math.min(...nodes.map((node) => node.x - NODE_WIDTH / 2));
+  const maxX = Math.max(...nodes.map((node) => node.x + NODE_WIDTH / 2));
+  const minY = Math.min(...nodes.map((node) => node.y - node.height / 2));
+  const maxY = Math.max(...nodes.map((node) => node.y + node.height / 2));
+
+  return {
+    minX,
+    maxX,
+    minY,
+    maxY,
+    width: maxX - minX,
+    height: maxY - minY,
+    centerX: (minX + maxX) / 2,
+    centerY: (minY + maxY) / 2,
+  };
+}
+
+function placeIsolatedNodesAroundGroups(
+  isolatedNodes: PositionedNode[],
+  anchorNodes: PositionedNode[]
+) {
+  if (isolatedNodes.length === 0) {
+    return;
+  }
+
+  const bounds = getNodeBounds(anchorNodes);
+  const sortedNodes = [...isolatedNodes].sort(
+    (a, b) =>
+      hashString(a.id) - hashString(b.id) || a.label.localeCompare(b.label)
+  );
+  const nodesPerRing = Math.max(6, Math.min(10, sortedNodes.length));
+  const baseRadiusX = Math.max(bounds.width / 2 + 170, 250);
+  const baseRadiusY = Math.max(bounds.height / 2 + 140, 180);
+
+  sortedNodes.forEach((node, index) => {
+    const ring = Math.floor(index / nodesPerRing);
+    const indexInRing = index % nodesPerRing;
+    const deterministicOffset =
+      ((hashString(node.id) % 1000) / 1000 - 0.5) * 0.45;
+    const angle =
+      ((indexInRing + 0.5) / nodesPerRing) * Math.PI * 2 +
+      deterministicOffset +
+      ring * 0.28;
+    const radiusX =
+      baseRadiusX +
+      ring * 120 +
+      ((hashString(`${node.id}:x`) % 1000) / 1000) * 40;
+    const radiusY =
+      baseRadiusY +
+      ring * 90 +
+      ((hashString(`${node.id}:y`) % 1000) / 1000) * 36;
+
+    node.x = bounds.centerX + Math.cos(angle) * radiusX;
+    node.y = bounds.centerY + Math.sin(angle) * radiusY;
+  });
+}
+
 function resolveNodeOverlaps(nodes: PositionedNode[]) {
   const resolvedNodes = resolveNodeCollisions(
     nodes.map((node) => ({
@@ -583,15 +665,16 @@ function positionNodes(graph: PatientGraph) {
         b.nodes.length - a.nodes.length
     );
 
-  const isolatedLayouts = components
+  const isolatedNodes = components
     .filter(
       (component) =>
         component.length === 1 &&
         getNodeDegree(component[0]?.id ?? "", neighborMap) === 0
     )
-    .map((component) => layoutClusterHorizontally(component, neighborMap));
+    .map((component) => component[0])
+    .filter((node): node is PositionedNode => Boolean(node));
 
-  const clusterLayouts = [...connectedClusterLayouts, ...isolatedLayouts];
+  const clusterLayouts = connectedClusterLayouts;
   const canvasMinX = 40;
   const canvasMaxX = VIRTUAL_WIDTH - 40;
   const availableWidth = canvasMaxX - canvasMinX;
@@ -653,6 +736,11 @@ function positionNodes(graph: PatientGraph) {
 
     cursorY += row.height + CLUSTER_ROW_GAP;
   }
+
+  placeIsolatedNodesAroundGroups(
+    isolatedNodes,
+    connectedClusterLayouts.flatMap((layout) => layout.nodes)
+  );
 
   resolveNodeOverlaps(nodes);
 
