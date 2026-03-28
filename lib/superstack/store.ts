@@ -201,13 +201,59 @@ export function hydratePatient(patient: DbPatient): PatientRecord {
 async function ensureExamplePatientForUser(userId: string) {
   const examplePatient = buildExamplePatientRecord();
   const existingPatients = await getPatientsByUserId({ userId });
-  const hasExamplePatient = existingPatients.some(
-    (patient) =>
-      patient.name === examplePatient.name &&
-      patient.summary === examplePatient.summary
-  );
+  const existingExamplePatient =
+    existingPatients.find((patient) => patient.name === examplePatient.name) ??
+    existingPatients.find(
+      (patient) => patient.summary === examplePatient.summary
+    );
 
-  if (hasExamplePatient) {
+  if (existingExamplePatient) {
+    const patientWithChats = await ensurePatientChats(existingExamplePatient);
+
+    await Promise.all([
+      updatePatientById({
+        id: patientWithChats.id,
+        userId,
+        updates: {
+          name: examplePatient.name,
+          summary: examplePatient.summary,
+          setupComplete: examplePatient.setupComplete,
+          profile: JSON.stringify(examplePatient.profile),
+          currentGraph: JSON.stringify(examplePatient.currentGraph),
+        },
+      }),
+      patientWithChats.intakeChatId
+        ? updateChatTitleById({
+            chatId: patientWithChats.intakeChatId,
+            title: buildPatientChatTitle(examplePatient.name, "intake"),
+          })
+        : Promise.resolve(),
+      patientWithChats.consultChatId
+        ? updateChatTitleById({
+            chatId: patientWithChats.consultChatId,
+            title: buildPatientChatTitle(examplePatient.name, "consult"),
+          })
+        : Promise.resolve(),
+      patientWithChats.intakeChatId
+        ? replaceMessagesByChatId({
+            chatId: patientWithChats.intakeChatId,
+            messages: toDbMessages({
+              chatId: patientWithChats.intakeChatId,
+              messages: examplePatient.intakeMessages,
+            }),
+          })
+        : Promise.resolve(),
+      patientWithChats.consultChatId
+        ? replaceMessagesByChatId({
+            chatId: patientWithChats.consultChatId,
+            messages: toDbMessages({
+              chatId: patientWithChats.consultChatId,
+              messages: examplePatient.consultMessages,
+            }),
+          })
+        : Promise.resolve(),
+    ]);
+
     return;
   }
 
