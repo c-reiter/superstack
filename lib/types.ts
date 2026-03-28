@@ -26,6 +26,8 @@ export type ChatTools = {
   updateDocument: updateDocumentTool;
   requestSuggestions: requestSuggestionsTool;
   createGraph: any;
+  setPatientName: any;
+  createOpenUIArtifact: any;
 };
 
 export type CustomUIDataTypes = {
@@ -34,6 +36,7 @@ export type CustomUIDataTypes = {
   sheetDelta: string;
   codeDelta: string;
   graphDelta: string;
+  openuiDelta: string;
   suggestion: Suggestion;
   appendMessage: string;
   id: string;

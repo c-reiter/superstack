@@ -10,9 +10,15 @@ import { z } from "zod";
 import { auth } from "@/app/(auth)/auth";
 import { sanitizeMessagesForModel } from "@/lib/ai/attachments";
 import { allowedModelIds, DEFAULT_CHAT_MODEL } from "@/lib/ai/models";
-import { intakePrompt, patientProfileSchema, profileUpdatePrompt } from "@/lib/ai/superstack-prompts";
 import { getLanguageModel } from "@/lib/ai/providers";
+import {
+  intakePrompt,
+  patientProfileSchema,
+  profileUpdatePrompt,
+} from "@/lib/ai/superstack-prompts";
+import { setPatientName } from "@/lib/ai/tools/set-patient-name";
 import { getPatientById } from "@/lib/db/queries";
+import { normalizePatientDisplayName } from "@/lib/superstack/naming";
 import { savePatientRecord } from "@/lib/superstack/store";
 import { emptyPatientProfile } from "@/lib/superstack/types";
 import type { ChatMessage } from "@/lib/types";
@@ -37,12 +43,20 @@ function stringifyConversation(messages: ChatMessage[]) {
 
 function summarizeProfile(profile: z.infer<typeof patientProfileSchema>) {
   const summaryParts = [
-    profile.diagnoses.length ? `Dx: ${profile.diagnoses.slice(0, 3).join(", ")}` : null,
+    profile.diagnoses.length
+      ? `Dx: ${profile.diagnoses.slice(0, 3).join(", ")}`
+      : null,
     profile.medications.length
-      ? `Meds: ${profile.medications.slice(0, 3).map((item) => item.name).join(", ")}`
+      ? `Meds: ${profile.medications
+          .slice(0, 3)
+          .map((item) => item.name)
+          .join(", ")}`
       : null,
     profile.supplements.length
-      ? `Supps: ${profile.supplements.slice(0, 3).map((item) => item.name).join(", ")}`
+      ? `Supps: ${profile.supplements
+          .slice(0, 3)
+          .map((item) => item.name)
+          .join(", ")}`
       : null,
     profile.symptoms.length
       ? `Symptoms: ${profile.symptoms.slice(0, 3).join(", ")}`
@@ -72,7 +86,9 @@ export async function POST(
     return Response.json({ error: "not_found" }, { status: 404 });
   }
 
-  const profile = patient.profile ? JSON.parse(patient.profile) : emptyPatientProfile();
+  const profile = patient.profile
+    ? JSON.parse(patient.profile)
+    : emptyPatientProfile();
   const modelId =
     body.selectedModelId && allowedModelIds.has(body.selectedModelId)
       ? body.selectedModelId
@@ -82,18 +98,28 @@ export async function POST(
   const modelMessages = await convertToModelMessages(sanitizedMessages);
 
   const stream = createUIMessageStream({
-    execute: async ({ writer }) => {
+    execute: ({ writer }) => {
       const result = streamText({
         model: getLanguageModel(modelId),
         system: intakePrompt(profile),
         messages: modelMessages,
         stopWhen: stepCountIs(4),
+        experimental_activeTools: ["setPatientName"],
+        tools: {
+          setPatientName: setPatientName({
+            patientId: id,
+            userId: session.user.id,
+          }),
+        },
       });
 
       writer.merge(result.toUIMessageStream());
     },
     onFinish: async ({ messages: assistantMessages }) => {
-      const fullMessages = [...uiMessages, ...(assistantMessages as ChatMessage[])];
+      const fullMessages = [
+        ...uiMessages,
+        ...(assistantMessages as ChatMessage[]),
+      ];
       const fullMessagesForProfile = [
         ...sanitizedMessages,
         ...(assistantMessages as ChatMessage[]),
@@ -109,13 +135,25 @@ export async function POST(
       });
 
       const updatedProfile = profileResult.object;
+      const latestPatient = await getPatientById({ id });
+      const latestProfile = latestPatient?.profile
+        ? { ...emptyPatientProfile(), ...JSON.parse(latestPatient.profile) }
+        : emptyPatientProfile();
+      const resolvedDisplayName =
+        normalizePatientDisplayName(updatedProfile.displayName) ??
+        normalizePatientDisplayName(latestProfile.displayName) ??
+        normalizePatientDisplayName(profile.displayName);
+      const resolvedProfile = {
+        ...updatedProfile,
+        ...(resolvedDisplayName ? { displayName: resolvedDisplayName } : {}),
+      };
 
       await savePatientRecord({
         id,
         userId: session.user.id,
-        name: updatedProfile.displayName || patient.name,
-        summary: summarizeProfile(updatedProfile),
-        profile: updatedProfile,
+        ...(resolvedDisplayName ? { name: resolvedDisplayName } : {}),
+        summary: summarizeProfile(resolvedProfile),
+        profile: resolvedProfile,
         intakeMessages: fullMessages,
       });
     },

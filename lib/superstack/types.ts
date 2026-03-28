@@ -1,3 +1,4 @@
+import { createInitialIntakeMessages } from "@/lib/superstack/intake";
 import type { ChatMessage } from "@/lib/types";
 
 export type StackItem = {
@@ -117,12 +118,12 @@ export const emptyPatientProfile = (): PatientProfile => ({
 
 export const emptyPatientRecord = (id: string): PatientRecord => ({
   id,
-  name: "New patient",
+  name: "New Patient 01",
   summary: "",
   setupComplete: false,
   profile: emptyPatientProfile(),
   currentGraph: null,
-  intakeMessages: [],
+  intakeMessages: createInitialIntakeMessages(),
   consultMessages: [],
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),

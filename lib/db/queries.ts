@@ -14,7 +14,9 @@ import {
 } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
+
 type PersistedDocumentKind = "text" | "code" | "image" | "sheet";
+
 import type { VisibilityType } from "@/components/chat/visibility-selector";
 import { ChatbotError } from "../errors";
 import { generateUUID } from "../utils";
@@ -24,11 +26,11 @@ import {
   type DBMessage,
   document,
   message,
+  type Patient,
+  patient,
   type Suggestion,
   stream,
   suggestion,
-  type Patient,
-  patient,
   type User,
   user,
   vote,
@@ -37,6 +39,75 @@ import { generateHashedPassword } from "./utils";
 
 const client = postgres(process.env.POSTGRES_URL ?? "");
 const db = drizzle(client);
+
+const DATABASE_ERROR_CODE = "bad_request:database" as const;
+const DEFAULT_PATIENT_NAME = "New patient";
+const EMPTY_JSON_OBJECT = "{}";
+const EMPTY_JSON_ARRAY = "[]";
+
+type PatientMutableFields = Pick<
+  Patient,
+  | "consultMessages"
+  | "currentGraph"
+  | "intakeMessages"
+  | "name"
+  | "profile"
+  | "setupComplete"
+  | "summary"
+>;
+
+const withDatabaseError = async <T>(
+  message: string,
+  operation: () => Promise<T>
+): Promise<T> => {
+  try {
+    return await operation();
+  } catch (error) {
+    if (error instanceof ChatbotError) {
+      throw error;
+    }
+
+    throw new ChatbotError(DATABASE_ERROR_CODE, message);
+  }
+};
+
+const getChatCursorById = async (chatId: string) => {
+  const [selectedChat] = await db
+    .select()
+    .from(chat)
+    .where(eq(chat.id, chatId))
+    .limit(1);
+
+  if (!selectedChat) {
+    throw new ChatbotError(
+      "not_found:database",
+      `Chat with id ${chatId} not found`
+    );
+  }
+
+  return selectedChat;
+};
+
+const getLatestDocumentById = async (documentId: string) => {
+  const [selectedDocument] = await db
+    .select()
+    .from(document)
+    .where(eq(document.id, documentId))
+    .orderBy(desc(document.createdAt))
+    .limit(1);
+
+  return selectedDocument ?? null;
+};
+
+const deleteChatRelations = async (chatIds: string[]) => {
+  if (chatIds.length === 0) {
+    return;
+  }
+
+  await db.delete(vote).where(inArray(vote.chatId, chatIds));
+  await db.delete(message).where(inArray(message.chatId, chatIds));
+  await db.delete(stream).where(inArray(stream.chatId, chatIds));
+};
 
 export async function getUser(email: string): Promise<User[]> {
   try {
@@ -100,57 +171,44 @@ export async function saveChat({
   }
 }
 
-export async function deleteChatById({ id }: { id: string }) {
-  try {
-    await db.delete(vote).where(eq(vote.chatId, id));
-    await db.delete(message).where(eq(message.chatId, id));
-    await db.delete(stream).where(eq(stream.chatId, id));
+export function deleteChatById({ id }: { id: string }) {
+  return withDatabaseError("Failed to delete chat by id", async () => {
+    await deleteChatRelations([id]);
 
-    const [chatsDeleted] = await db
+    const [deletedChat] = await db
       .delete(chat)
       .where(eq(chat.id, id))
       .returning();
-    return chatsDeleted;
-  } catch (_error) {
-    throw new ChatbotError(
-      "bad_request:database",
-      "Failed to delete chat by id"
-    );
-  }
+    return deletedChat;
+  });
 }
 
-export async function deleteAllChatsByUserId({ userId }: { userId: string }) {
-  try {
-    const userChats = await db
-      .select({ id: chat.id })
-      .from(chat)
-      .where(eq(chat.userId, userId));
+export function deleteAllChatsByUserId({ userId }: { userId: string }) {
+  return withDatabaseError(
+    "Failed to delete all chats by user id",
+    async () => {
+      const userChats = await db
+        .select({ id: chat.id })
+        .from(chat)
+        .where(eq(chat.userId, userId));
 
-    if (userChats.length === 0) {
-      return { deletedCount: 0 };
+      if (userChats.length === 0) {
+        return { deletedCount: 0 };
+      }
+
+      await deleteChatRelations(userChats.map((currentChat) => currentChat.id));
+
+      const deletedChats = await db
+        .delete(chat)
+        .where(eq(chat.userId, userId))
+        .returning();
+
+      return { deletedCount: deletedChats.length };
     }
-
-    const chatIds = userChats.map((c) => c.id);
-
-    await db.delete(vote).where(inArray(vote.chatId, chatIds));
-    await db.delete(message).where(inArray(message.chatId, chatIds));
-    await db.delete(stream).where(inArray(stream.chatId, chatIds));
-
-    const deletedChats = await db
-      .delete(chat)
-      .where(eq(chat.userId, userId))
-      .returning();
-
-    return { deletedCount: deletedChats.length };
-  } catch (_error) {
-    throw new ChatbotError(
-      "bad_request:database",
-      "Failed to delete all chats by user id"
-    );
-  }
+  );
 }
 
-export async function getChatsByUserId({
+export function getChatsByUserId({
   id,
   limit,
   startingAfter,
@@ -161,7 +219,7 @@ export async function getChatsByUserId({
   startingAfter: string | null;
   endingBefore: string | null;
 }) {
-  try {
+  return withDatabaseError("Failed to get chats by user id", async () => {
     const extendedLimit = limit + 1;
 
     const query = (whereCondition?: SQL<unknown>) =>
@@ -179,34 +237,10 @@ export async function getChatsByUserId({
     let filteredChats: Chat[] = [];
 
     if (startingAfter) {
-      const [selectedChat] = await db
-        .select()
-        .from(chat)
-        .where(eq(chat.id, startingAfter))
-        .limit(1);
-
-      if (!selectedChat) {
-        throw new ChatbotError(
-          "not_found:database",
-          `Chat with id ${startingAfter} not found`
-        );
-      }
-
+      const selectedChat = await getChatCursorById(startingAfter);
       filteredChats = await query(gt(chat.createdAt, selectedChat.createdAt));
     } else if (endingBefore) {
-      const [selectedChat] = await db
-        .select()
-        .from(chat)
-        .where(eq(chat.id, endingBefore))
-        .limit(1);
-
-      if (!selectedChat) {
-        throw new ChatbotError(
-          "not_found:database",
-          `Chat with id ${endingBefore} not found`
-        );
-      }
-
+      const selectedChat = await getChatCursorById(endingBefore);
       filteredChats = await query(lt(chat.createdAt, selectedChat.createdAt));
     } else {
       filteredChats = await query();
@@ -218,12 +252,7 @@ export async function getChatsByUserId({
       chats: hasMore ? filteredChats.slice(0, limit) : filteredChats,
       hasMore,
     };
-  } catch (_error) {
-    throw new ChatbotError(
-      "bad_request:database",
-      "Failed to get chats by user id"
-    );
-  }
+  });
 }
 
 export async function getChatById({ id }: { id: string }) {
@@ -348,22 +377,16 @@ export async function saveDocument({
   }
 }
 
-export async function updateDocumentContent({
+export function updateDocumentContent({
   id,
   content,
 }: {
   id: string;
   content: string;
 }) {
-  try {
-    const docs = await db
-      .select()
-      .from(document)
-      .where(eq(document.id, id))
-      .orderBy(desc(document.createdAt))
-      .limit(1);
+  return withDatabaseError("Failed to update document content", async () => {
+    const latest = await getLatestDocumentById(id);
 
-    const latest = docs[0];
     if (!latest) {
       throw new ChatbotError("not_found:database", "Document not found");
     }
@@ -373,15 +396,7 @@ export async function updateDocumentContent({
       .set({ content })
       .where(and(eq(document.id, id), eq(document.createdAt, latest.createdAt)))
       .returning();
-  } catch (_error) {
-    if (_error instanceof ChatbotError) {
-      throw _error;
-    }
-    throw new ChatbotError(
-      "bad_request:database",
-      "Failed to update document content"
-    );
-  }
+  });
 }
 
 export async function getDocumentsById({ id }: { id: string }) {
@@ -665,7 +680,7 @@ export async function getPatientById({ id }: { id: string }) {
   }
 }
 
-export async function createPatient({
+export function createPatient({
   userId,
   name,
   summary,
@@ -684,39 +699,38 @@ export async function createPatient({
   intakeMessages?: string;
   consultMessages?: string;
 }) {
-  try {
+  return withDatabaseError("Failed to create patient", async () => {
+    const timestamp = new Date();
     const [createdPatient] = await db
       .insert(patient)
       .values({
         userId,
-        name: name ?? "New patient",
+        name: name ?? DEFAULT_PATIENT_NAME,
         summary: summary ?? "",
         setupComplete: setupComplete ?? false,
-        profile: profile ?? "{}",
-        currentGraph: currentGraph ?? "{}",
-        intakeMessages: intakeMessages ?? "[]",
-        consultMessages: consultMessages ?? "[]",
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        profile: profile ?? EMPTY_JSON_OBJECT,
+        currentGraph: currentGraph ?? EMPTY_JSON_OBJECT,
+        intakeMessages: intakeMessages ?? EMPTY_JSON_ARRAY,
+        consultMessages: consultMessages ?? EMPTY_JSON_ARRAY,
+        createdAt: timestamp,
+        updatedAt: timestamp,
       })
       .returning();
 
     return createdPatient;
-  } catch (_error) {
-    throw new ChatbotError("bad_request:database", "Failed to create patient");
-  }
+  });
 }
 
-export async function updatePatientById({
+export function updatePatientById({
   id,
   userId,
   updates,
 }: {
   id: string;
   userId: string;
-  updates: Partial<Pick<Patient, "name" | "summary" | "setupComplete" | "profile" | "currentGraph" | "intakeMessages" | "consultMessages">>;
+  updates: Partial<PatientMutableFields>;
 }) {
-  try {
+  return withDatabaseError("Failed to update patient by id", async () => {
     const [updatedPatient] = await db
       .update(patient)
       .set({
@@ -727,12 +741,7 @@ export async function updatePatientById({
       .returning();
 
     return updatedPatient ?? null;
-  } catch (_error) {
-    throw new ChatbotError(
-      "bad_request:database",
-      "Failed to update patient by id"
-    );
-  }
+  });
 }
 
 export async function deletePatientsByUserId({ userId }: { userId: string }) {

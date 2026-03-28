@@ -21,6 +21,25 @@ import { MessageReasoning } from "./message-reasoning";
 import { PreviewAttachment } from "./preview-attachment";
 import { Weather } from "./weather";
 
+const TOOL_WIDTH = {
+  compact: "w-[min(100%,420px)]",
+  default: "w-[min(100%,450px)]",
+} as const;
+
+const AssistantAvatar = () => (
+  <div className="flex h-7 shrink-0 items-center">
+    <div className="flex size-7 items-center justify-center rounded-lg bg-muted/60 text-muted-foreground ring-1 ring-border/50">
+      <SparklesIcon size={13} />
+    </div>
+  </div>
+);
+
+const ToolErrorMessage = ({ message }: { message: string }) => (
+  <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-500 dark:bg-red-950/50">
+    {message}
+  </div>
+);
+
 const PurePreviewMessage = ({
   addToolApprovalResponse,
   chatId,
@@ -66,7 +85,7 @@ const PurePreviewMessage = ({
   const attachments = attachmentsFromMessage.length > 0 && (
     <div
       className="flex flex-row justify-end gap-2"
-      data-testid={"message-attachments"}
+      data-testid="message-attachments"
     >
       {attachmentsFromMessage.map((attachment) => (
         <PreviewAttachment
@@ -81,36 +100,43 @@ const PurePreviewMessage = ({
     </div>
   );
 
-  const mergedReasoning = message.parts?.reduce(
-    (acc, part) => {
-      if (part.type === "reasoning" && part.text?.trim().length > 0) {
-        return {
-          text: acc.text ? `${acc.text}\n\n${part.text}` : part.text,
-          isStreaming: "state" in part ? part.state === "streaming" : false,
-          rendered: false,
-        };
-      }
-      return acc;
-    },
-    { text: "", isStreaming: false, rendered: false }
-  ) ?? { text: "", isStreaming: false, rendered: false };
+  const reasoningParts = message.parts.filter(
+    (
+      part
+    ): part is Extract<(typeof message.parts)[number], { type: "reasoning" }> =>
+      part.type === "reasoning" &&
+      "text" in part &&
+      part.text?.trim().length > 0
+  );
+  const firstReasoningPartIndex = message.parts.findIndex(
+    (part) =>
+      part.type === "reasoning" &&
+      "text" in part &&
+      part.text?.trim().length > 0
+  );
+  const mergedReasoning = {
+    isStreaming: reasoningParts.some(
+      (part) => "state" in part && part.state === "streaming"
+    ),
+    text: reasoningParts.map((part) => part.text).join("\n\n"),
+  };
 
   const parts = message.parts?.map((part, index) => {
     const { type } = part;
     const key = `message-${message.id}-part-${index}`;
 
     if (type === "reasoning") {
-      if (!mergedReasoning.rendered && mergedReasoning.text) {
-        mergedReasoning.rendered = true;
-        return (
-          <MessageReasoning
-            isLoading={isLoading || mergedReasoning.isStreaming}
-            key={key}
-            reasoning={mergedReasoning.text}
-          />
-        );
+      if (index !== firstReasoningPartIndex || !mergedReasoning.text) {
+        return null;
       }
-      return null;
+
+      return (
+        <MessageReasoning
+          isLoading={isLoading || mergedReasoning.isStreaming}
+          key={key}
+          reasoning={mergedReasoning.text}
+        />
+      );
     }
 
     if (type === "text") {
@@ -130,17 +156,19 @@ const PurePreviewMessage = ({
 
     if (type === "tool-getWeather") {
       const { toolCallId, state } = part;
-      const approvalId = (part as { approval?: { id: string } }).approval?.id;
+      const approval = (
+        part as {
+          approval?: { approved?: boolean; id?: string };
+        }
+      ).approval;
+      const approvalId = approval?.id;
       const isDenied =
         state === "output-denied" ||
-        (state === "approval-responded" &&
-          (part as { approval?: { approved?: boolean } }).approval?.approved ===
-            false);
-      const widthClass = "w-[min(100%,450px)]";
+        (state === "approval-responded" && approval?.approved === false);
 
       if (state === "output-available") {
         return (
-          <div className={widthClass} key={toolCallId}>
+          <div className={TOOL_WIDTH.default} key={toolCallId}>
             <Weather weatherAtLocation={part.output} />
           </div>
         );
@@ -148,7 +176,7 @@ const PurePreviewMessage = ({
 
       if (isDenied) {
         return (
-          <div className={widthClass} key={toolCallId}>
+          <div className={TOOL_WIDTH.default} key={toolCallId}>
             <Tool className="w-full" defaultOpen={true}>
               <ToolHeader state="output-denied" type="tool-getWeather" />
               <ToolContent>
@@ -163,7 +191,7 @@ const PurePreviewMessage = ({
 
       if (state === "approval-responded") {
         return (
-          <div className={widthClass} key={toolCallId}>
+          <div className={TOOL_WIDTH.default} key={toolCallId}>
             <Tool className="w-full" defaultOpen={true}>
               <ToolHeader state={state} type="tool-getWeather" />
               <ToolContent>
@@ -175,7 +203,7 @@ const PurePreviewMessage = ({
       }
 
       return (
-        <div className={widthClass} key={toolCallId}>
+        <div className={TOOL_WIDTH.default} key={toolCallId}>
           <Tool className="w-full" defaultOpen={true}>
             <ToolHeader state={state} type="tool-getWeather" />
             <ToolContent>
@@ -223,12 +251,10 @@ const PurePreviewMessage = ({
 
       if (part.output && "error" in part.output) {
         return (
-          <div
-            className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-500 dark:bg-red-950/50"
+          <ToolErrorMessage
             key={toolCallId}
-          >
-            Error creating document: {String(part.output.error)}
-          </div>
+            message={`Error creating document: ${String(part.output.error)}`}
+          />
         );
       }
 
@@ -246,12 +272,10 @@ const PurePreviewMessage = ({
 
       if (part.output && "error" in part.output) {
         return (
-          <div
-            className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-500 dark:bg-red-950/50"
+          <ToolErrorMessage
             key={toolCallId}
-          >
-            Error updating document: {String(part.output.error)}
-          </div>
+            message={`Error updating document: ${String(part.output.error)}`}
+          />
         );
       }
 
@@ -271,7 +295,7 @@ const PurePreviewMessage = ({
 
       return (
         <Tool
-          className="w-[min(100%,450px)]"
+          className={TOOL_WIDTH.default}
           defaultOpen={true}
           key={toolCallId}
         >
@@ -306,7 +330,7 @@ const PurePreviewMessage = ({
 
       return (
         <Tool
-          className="w-[min(100%,420px)]"
+          className={TOOL_WIDTH.compact}
           defaultOpen={true}
           key={toolCallId}
         >
@@ -323,7 +347,54 @@ const PurePreviewMessage = ({
                     </div>
                   ) : (
                     <div className="rounded-2xl border border-border/50 bg-card/50 p-3 text-sm text-muted-foreground">
-                      Opened graph: <span className="font-medium text-foreground">{part.output.title}</span>
+                      Opened graph:{" "}
+                      <span className="font-medium text-foreground">
+                        {part.output.title}
+                      </span>
+                    </div>
+                  )
+                }
+              />
+            )}
+          </ToolContent>
+        </Tool>
+      );
+    }
+
+    if (type === "tool-setPatientName") {
+      return null;
+    }
+
+    if (type === "tool-createOpenUIArtifact") {
+      const { toolCallId, state } = part;
+
+      return (
+        <Tool
+          className={TOOL_WIDTH.compact}
+          defaultOpen={true}
+          key={toolCallId}
+        >
+          <ToolHeader
+            state={state}
+            toolName="createOpenUIArtifact"
+            type="dynamic-tool"
+          />
+          <ToolContent>
+            {state === "input-available" && <ToolInput input={part.input} />}
+            {state === "output-available" && (
+              <ToolOutput
+                errorText={undefined}
+                output={
+                  "error" in part.output ? (
+                    <div className="rounded border p-2 text-red-500">
+                      Error: {String(part.output.error)}
+                    </div>
+                  ) : (
+                    <div className="rounded-2xl border border-border/50 bg-card/50 p-3 text-sm text-muted-foreground">
+                      Opened artifact:{" "}
+                      <span className="font-medium text-foreground">
+                        {part.output.title}
+                      </span>
                     </div>
                   )
                 }
@@ -376,13 +447,7 @@ const PurePreviewMessage = ({
           isUser ? "flex flex-col items-end gap-2" : "flex items-start gap-3"
         )}
       >
-        {isAssistant && (
-          <div className="flex h-7 shrink-0 items-center">
-            <div className="flex size-7 items-center justify-center rounded-lg bg-muted/60 text-muted-foreground ring-1 ring-border/50">
-              <SparklesIcon size={13} />
-            </div>
-          </div>
-        )}
+        {isAssistant && <AssistantAvatar />}
         {isAssistant ? (
           <div className="flex min-w-0 flex-1 flex-col gap-2">{content}</div>
         ) : (
@@ -403,11 +468,7 @@ export const ThinkingMessage = () => {
       data-testid="message-assistant-loading"
     >
       <div className="flex items-start gap-3">
-        <div className="flex h-7 shrink-0 items-center">
-          <div className="flex size-7 items-center justify-center rounded-lg bg-muted/60 text-muted-foreground ring-1 ring-border/50">
-            <SparklesIcon size={13} />
-          </div>
-        </div>
+        <AssistantAvatar />
 
         <div className="flex h-7 items-center text-[15px] leading-7">
           <Shimmer className="font-medium" duration={1}>

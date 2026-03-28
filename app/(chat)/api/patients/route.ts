@@ -27,7 +27,7 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}));
   const { name } = createPatientSchema.parse(body ?? {});
 
-  const patient = await createPatient(session.user.id, name ?? "New patient");
+  const patient = await createPatient(session.user.id, name);
 
   return Response.json({ patient }, { status: 201 });
 }

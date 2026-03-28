@@ -47,6 +47,126 @@ import { type PostRequestBody, postRequestBodySchema } from "./schema";
 
 export const maxDuration = 60;
 
+const resolveChatModel = (selectedChatModel: string) =>
+  allowedModelIds.has(selectedChatModel)
+    ? selectedChatModel
+    : DEFAULT_CHAT_MODEL;
+
+const getResolvedCapabilities = async (chatModel: string) => {
+  const modelCapabilities = await getCapabilities();
+  const capabilities = modelCapabilities[chatModel];
+
+  return {
+    isReasoningModel: capabilities?.reasoning === true,
+    modelConfig: chatModels.find((model) => model.id === chatModel),
+    supportsTools: capabilities?.tools === true,
+  };
+};
+
+const buildApprovalStateMap = (messages: PostRequestBody["messages"]) =>
+  new Map(
+    messages?.flatMap(
+      (message) =>
+        message.parts
+          ?.filter(
+            (part: Record<string, unknown>) =>
+              part.state === "approval-responded" ||
+              part.state === "output-denied"
+          )
+          .map((part: Record<string, unknown>) => [
+            String(part.toolCallId ?? ""),
+            part,
+          ]) ?? []
+    ) ?? []
+  );
+
+const buildUiMessages = ({
+  isToolApprovalFlow,
+  message,
+  messages,
+  messagesFromDb,
+}: {
+  isToolApprovalFlow: boolean;
+  message: PostRequestBody["message"];
+  messages: PostRequestBody["messages"];
+  messagesFromDb: DBMessage[];
+}) => {
+  if (!isToolApprovalFlow || !messages) {
+    return [...convertToUIMessages(messagesFromDb), message as ChatMessage];
+  }
+
+  const approvalStates = buildApprovalStateMap(messages);
+
+  return convertToUIMessages(messagesFromDb).map((storedMessage) => ({
+    ...storedMessage,
+    parts: storedMessage.parts.map((part) => {
+      if ("toolCallId" in part && approvalStates.has(String(part.toolCallId))) {
+        return { ...part, ...approvalStates.get(String(part.toolCallId)) };
+      }
+
+      return part;
+    }),
+  })) as ChatMessage[];
+};
+
+const saveAssistantMessages = async ({
+  chatId,
+  finishedMessages,
+  isToolApprovalFlow,
+  uiMessages,
+}: {
+  chatId: string;
+  finishedMessages: ChatMessage[];
+  isToolApprovalFlow: boolean;
+  uiMessages: ChatMessage[];
+}) => {
+  if (isToolApprovalFlow) {
+    for (const finishedMessage of finishedMessages) {
+      const existingMessage = uiMessages.find(
+        (message) => message.id === finishedMessage.id
+      );
+
+      if (existingMessage) {
+        await updateMessage({
+          id: finishedMessage.id,
+          parts: finishedMessage.parts,
+        });
+        continue;
+      }
+
+      await saveMessages({
+        messages: [
+          {
+            id: finishedMessage.id,
+            role: finishedMessage.role,
+            parts: finishedMessage.parts,
+            createdAt: new Date(),
+            attachments: [],
+            chatId,
+          },
+        ],
+      });
+    }
+
+    return;
+  }
+
+  if (finishedMessages.length === 0) {
+    return;
+  }
+
+  await saveMessages({
+    messages: finishedMessages.map((currentMessage) => ({
+      id: currentMessage.id,
+      role: currentMessage.role,
+      parts: currentMessage.parts,
+      createdAt: new Date(),
+      attachments: [],
+      chatId,
+    })),
+  });
+};
+
 function getStreamContext() {
   try {
     return createResumableStreamContext({ waitUntil: after });
@@ -80,9 +200,7 @@ export async function POST(request: Request) {
       return new ChatbotError("unauthorized:chat").toResponse();
     }
 
-    const chatModel = allowedModelIds.has(selectedChatModel)
-      ? selectedChatModel
-      : DEFAULT_CHAT_MODEL;
+    const chatModel = resolveChatModel(selectedChatModel);
 
     await checkIpRateLimit(ipAddress(request));
 
@@ -118,43 +236,12 @@ export async function POST(request: Request) {
       titlePromise = generateTitleFromUserMessage({ message });
     }
 
-    let uiMessages: ChatMessage[];
-
-    if (isToolApprovalFlow && messages) {
-      const dbMessages = convertToUIMessages(messagesFromDb);
-      const approvalStates = new Map(
-        messages.flatMap(
-          (m) =>
-            m.parts
-              ?.filter(
-                (p: Record<string, unknown>) =>
-                  p.state === "approval-responded" ||
-                  p.state === "output-denied"
-              )
-              .map((p: Record<string, unknown>) => [
-                String(p.toolCallId ?? ""),
-                p,
-              ]) ?? []
-        )
-      );
-      uiMessages = dbMessages.map((msg) => ({
-        ...msg,
-        parts: msg.parts.map((part) => {
-          if (
-            "toolCallId" in part &&
-            approvalStates.has(String(part.toolCallId))
-          ) {
-            return { ...part, ...approvalStates.get(String(part.toolCallId)) };
-          }
-          return part;
-        }),
-      })) as ChatMessage[];
-    } else {
-      uiMessages = [
-        ...convertToUIMessages(messagesFromDb),
-        message as ChatMessage,
-      ];
-    }
+    const uiMessages = buildUiMessages({
+      isToolApprovalFlow,
+      message,
+      messages,
+      messagesFromDb,
+    });
 
     const { longitude, latitude, city, country } = geolocation(request);
 
@@ -180,11 +267,8 @@ export async function POST(request: Request) {
       });
     }
 
-    const modelConfig = chatModels.find((m) => m.id === chatModel);
-    const modelCapabilities = await getCapabilities();
-    const capabilities = modelCapabilities[chatModel];
-    const isReasoningModel = capabilities?.reasoning === true;
-    const supportsTools = capabilities?.tools === true;
+    const { isReasoningModel, modelConfig, supportsTools } =
+      await getResolvedCapabilities(chatModel);
 
     const modelMessages = await convertToModelMessages(uiMessages);
 
@@ -251,41 +335,12 @@ export async function POST(request: Request) {
       },
       generateId: generateUUID,
       onFinish: async ({ messages: finishedMessages }) => {
-        if (isToolApprovalFlow) {
-          for (const finishedMsg of finishedMessages) {
-            const existingMsg = uiMessages.find((m) => m.id === finishedMsg.id);
-            if (existingMsg) {
-              await updateMessage({
-                id: finishedMsg.id,
-                parts: finishedMsg.parts,
-              });
-            } else {
-              await saveMessages({
-                messages: [
-                  {
-                    id: finishedMsg.id,
-                    role: finishedMsg.role,
-                    parts: finishedMsg.parts,
-                    createdAt: new Date(),
-                    attachments: [],
-                    chatId: id,
-                  },
-                ],
-              });
-            }
-          }
-        } else if (finishedMessages.length > 0) {
-          await saveMessages({
-            messages: finishedMessages.map((currentMessage) => ({
-              id: currentMessage.id,
-              role: currentMessage.role,
-              parts: currentMessage.parts,
-              createdAt: new Date(),
-              attachments: [],
-              chatId: id,
-            })),
-          });
-        }
+        await saveAssistantMessages({
+          chatId: id,
+          finishedMessages: finishedMessages as ChatMessage[],
+          isToolApprovalFlow,
+          uiMessages,
+        });
       },
       onError: (error) => {
         if (

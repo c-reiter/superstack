@@ -6,7 +6,17 @@ import { EyeIcon, EyeOffIcon, Loader2Icon, PencilLineIcon } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import useSWR from "swr";
 import { GraphCanvas } from "@/artifacts/graph/client";
+import {
+  OpenUIArtifactCanvas,
+  parseOpenUIArtifactContent,
+} from "@/artifacts/openui/client";
 import { DataStreamHandler } from "@/components/chat/data-stream-handler";
+import { useDataStream } from "@/components/chat/data-stream-provider";
+import {
+  CheckCircleFillIcon,
+  ChevronDownIcon,
+  PlusIcon,
+} from "@/components/chat/icons";
 import { Messages } from "@/components/chat/messages";
 import { MultimodalInput } from "@/components/chat/multimodal-input";
 import { Button } from "@/components/ui/button";
@@ -17,14 +27,20 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useDataStream } from "@/components/chat/data-stream-provider";
-import { CheckCircleFillIcon, ChevronDownIcon, PlusIcon } from "@/components/chat/icons";
 import { initialArtifactData, useArtifact } from "@/hooks/use-artifact";
 import { DEFAULT_CHAT_MODEL } from "@/lib/ai/models";
+import { createInitialIntakeMessages } from "@/lib/superstack/intake";
+import { isPlaceholderPatientName } from "@/lib/superstack/naming";
 import type { PatientProfile, PatientRecord } from "@/lib/superstack/types";
 import type { Attachment, ChatMessage } from "@/lib/types";
 import { fetcher, fetchWithErrorHandlers } from "@/lib/utils";
 
+const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+
+const getPatientsApiPath = (patientId?: string, suffix = "") =>
+  patientId
+    ? `${BASE_PATH}/api/patients/${patientId}${suffix}`
+    : `${BASE_PATH}/api/patients`;
 
 function parseGraph(content: string) {
   try {
@@ -85,7 +101,8 @@ function IntakeEmptyState({ patient }: { patient: PatientRecord }) {
         Intake / profile build
       </div>
       <div className="mt-4 text-3xl font-semibold tracking-tight">
-        Build out {patient.name === "New patient" ? "this patient" : patient.name}
+        Build out{" "}
+        {isPlaceholderPatientName(patient.name) ? "this patient" : patient.name}
       </div>
       <div className="mt-3 text-sm leading-6 text-muted-foreground">
         Capture demographics, diagnoses, medications, supplements, hormones,
@@ -113,24 +130,50 @@ function ConsultEmptyState({ patient }: { patient: PatientRecord }) {
   );
 }
 
-function GraphPanel() {
+function LoadingState({ label }: { label: string }) {
+  return (
+    <div className="flex h-dvh items-center justify-center bg-background text-sm text-muted-foreground">
+      <Loader2Icon className="mr-2 size-4 animate-spin" /> {label}
+    </div>
+  );
+}
+
+function ArtifactPanel() {
   const { artifact, setArtifact } = useArtifact();
-  const graph = useMemo(() => parseGraph(artifact.content), [artifact.content]);
+  const graph = useMemo(
+    () => (artifact.kind === "graph" ? parseGraph(artifact.content) : null),
+    [artifact.content, artifact.kind]
+  );
+  const openUIArtifact = useMemo(
+    () =>
+      artifact.kind === "openui"
+        ? parseOpenUIArtifactContent(artifact.content)
+        : null,
+    [artifact.content, artifact.kind]
+  );
 
   if (!artifact.isVisible) {
     return null;
   }
+
+  const isGraphArtifact = artifact.kind === "graph";
+  const panelTitle = isGraphArtifact
+    ? "Interaction graph"
+    : artifact.title || "OpenUI artifact";
+  const panelSubtitle = isGraphArtifact
+    ? "Current profile or recommendation view"
+    : openUIArtifact?.view === "table"
+      ? "Structured table artifact"
+      : "Structured recommendation artifact";
 
   return (
     <aside className="hidden h-dvh w-[55%] shrink-0 border-l border-border/50 bg-sidebar xl:flex xl:flex-col">
       <div className="flex h-14 items-center justify-between border-t border-b border-border/50 px-5">
         <div>
           <div className="text-sm font-semibold tracking-tight">
-            Interaction graph
+            {panelTitle}
           </div>
-          <div className="text-xs text-muted-foreground">
-            Current profile or recommendation view
-          </div>
+          <div className="text-xs text-muted-foreground">{panelSubtitle}</div>
         </div>
 
         <div className="flex items-center gap-2">
@@ -147,18 +190,21 @@ function GraphPanel() {
             variant="outline"
           >
             <EyeOffIcon className="size-4" />
-            Hide graph
+            Hide artifact
           </Button>
         </div>
       </div>
 
       <div className="min-h-0 flex-1 overflow-auto">
-        {graph ? (
+        {isGraphArtifact && graph ? (
           <GraphCanvas graph={graph} />
+        ) : artifact.kind === "openui" && openUIArtifact ? (
+          <OpenUIArtifactCanvas artifact={openUIArtifact} />
         ) : (
           <div className="flex h-full items-center justify-center p-8 text-center text-sm text-muted-foreground">
-            No graph yet. Ask to inspect the stack visually or open the current
-            profile graph.
+            {isGraphArtifact
+              ? "No graph yet. Ask to inspect the stack visually or open the current profile graph."
+              : "No structured artifact yet. Ask for a table or a Level 0-5 recommendation artifact."}
           </div>
         )}
       </div>
@@ -170,8 +216,6 @@ type PatientChatPaneProps = {
   patient: PatientRecord;
   mode: "intake" | "consult";
   isGraphVisible: boolean;
-  onFinishSetup: () => Promise<void>;
-  onBackToConsult: () => void;
   onRefreshPatient: () => Promise<unknown>;
   onRefreshList: () => Promise<unknown>;
   onRegenerateGraph: () => Promise<void>;
@@ -183,8 +227,6 @@ function PatientChatPane({
   patient,
   mode,
   isGraphVisible,
-  onFinishSetup,
-  onBackToConsult,
   onRefreshPatient,
   onRefreshList,
   onRegenerateGraph,
@@ -196,6 +238,25 @@ function PatientChatPane({
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const activeModelId = DEFAULT_CHAT_MODEL;
 
+  const initialMessages = useMemo(
+    () =>
+      mode === "intake"
+        ? patient.intakeMessages.length > 0
+          ? patient.intakeMessages
+          : createInitialIntakeMessages({
+              messageId: `intake-welcome-${patient.id}`,
+              createdAt: patient.createdAt,
+            })
+        : patient.consultMessages,
+    [
+      mode,
+      patient.consultMessages,
+      patient.createdAt,
+      patient.id,
+      patient.intakeMessages,
+    ]
+  );
+
   const {
     messages,
     setMessages,
@@ -206,10 +267,9 @@ function PatientChatPane({
     addToolApprovalResponse,
   } = useChat<ChatMessage>({
     id: `${mode}-${patient.id}`,
-    messages:
-      mode === "intake" ? patient.intakeMessages : patient.consultMessages,
+    messages: initialMessages,
     transport: new DefaultChatTransport({
-      api: `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/patients/${patient.id}/${mode}`,
+      api: getPatientsApiPath(patient.id, `/${mode}`),
       fetch: fetchWithErrorHandlers,
       prepareSendMessagesRequest(request) {
         return {
@@ -234,7 +294,9 @@ function PatientChatPane({
   });
 
   const canFinishSetup = hasPatientData(patient.profile, messages);
-  const graphRegenerationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const graphRegenerationTimeoutRef = useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null);
 
   useEffect(() => {
     onCanFinishSetupChange(canFinishSetup);
@@ -265,7 +327,9 @@ function PatientChatPane({
     }
 
     graphRegenerationTimeoutRef.current = setTimeout(() => {
-      void onRegenerateGraph();
+      onRegenerateGraph().catch((error) => {
+        console.error("Failed to regenerate graph:", error);
+      });
     }, 60_000);
 
     return () => {
@@ -279,7 +343,8 @@ function PatientChatPane({
   const topSlot =
     mode === "intake" && (patient.setupComplete || canFinishSetup) ? (
       <div className="text-center text-sm text-muted-foreground">
-        If all patient info is entered, click the finish button to continue chatting about symptoms.
+        If all patient info is entered, click the finish button to continue
+        chatting about symptoms.
       </div>
     ) : null;
 
@@ -361,17 +426,21 @@ function PatientChatPane({
 
 export function SuperstackApp() {
   const [selectedPatientId, setSelectedPatientId] = useState("");
-  const [modeOverride, setModeOverride] = useState<
-    "intake" | "consult" | null
-  >(null);
+  const [modeOverride, setModeOverride] = useState<"intake" | "consult" | null>(
+    null
+  );
   const [creatingPatient, setCreatingPatient] = useState(false);
   const [liveCanFinishSetup, setLiveCanFinishSetup] = useState(false);
   const initialPatientCreationTriggeredRef = useRef(false);
   const { artifact, setArtifact } = useArtifact();
 
-  const { data, isLoading, mutate: mutatePatients } = useSWR<{
+  const {
+    data,
+    isLoading,
+    mutate: mutatePatients,
+  } = useSWR<{
     patients: PatientRecord[];
-  }>(`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/patients`, fetcher);
+  }>(getPatientsApiPath(), fetcher);
 
   const patients = data?.patients ?? [];
 
@@ -397,17 +466,14 @@ export function SuperstackApp() {
 
   const { data: patientData, mutate: mutatePatient } = useSWR<{
     patient: PatientRecord;
-  }>(
-    selectedPatientId
-      ? `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/patients/${selectedPatientId}`
-      : null,
-    fetcher
-  );
+  }>(selectedPatientId ? getPatientsApiPath(selectedPatientId) : null, fetcher);
 
   const patient = patientData?.patient;
-  const activeMode = modeOverride ?? (patient?.setupComplete ? "consult" : "intake");
+  const activeMode =
+    modeOverride ?? (patient?.setupComplete ? "consult" : "intake");
   const canFinishSetup = patient
-    ? hasPatientData(patient.profile, patient.intakeMessages) || liveCanFinishSetup
+    ? hasPatientData(patient.profile, patient.intakeMessages) ||
+      liveCanFinishSetup
     : false;
 
   const handleCreatePatient = useCallback(async () => {
@@ -418,14 +484,11 @@ export function SuperstackApp() {
     setCreatingPatient(true);
 
     try {
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/patients`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({}),
-        }
-      );
+      const response = await fetch(getPatientsApiPath(), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
 
       if (!response.ok) {
         throw new Error(`Failed to create patient: ${response.status}`);
@@ -455,12 +518,16 @@ export function SuperstackApp() {
     }
 
     initialPatientCreationTriggeredRef.current = true;
-    void handleCreatePatient().catch((error) => {
+    handleCreatePatient().catch((error) => {
       console.error("Failed to create initial patient:", error);
     });
   }, [creatingPatient, handleCreatePatient, isLoading, patients.length]);
 
   useEffect(() => {
+    if (!selectedPatientId) {
+      return;
+    }
+
     setModeOverride(null);
     setArtifact(initialArtifactData);
     setLiveCanFinishSetup(false);
@@ -480,7 +547,7 @@ export function SuperstackApp() {
       return;
     }
 
-    await fetch(`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/patients/${patient.id}/graph`, {
+    await fetch(getPatientsApiPath(patient.id, "/graph"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ selectedModelId: DEFAULT_CHAT_MODEL }),
@@ -515,7 +582,7 @@ export function SuperstackApp() {
       return;
     }
 
-    await fetch(`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/patients/${patient.id}`, {
+    await fetch(getPatientsApiPath(patient.id), {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ setupComplete: true }),
@@ -525,20 +592,15 @@ export function SuperstackApp() {
     setModeOverride("consult");
   }
 
-  if ((isLoading && patients.length === 0) || (patients.length === 0 && creatingPatient)) {
-    return (
-      <div className="flex h-dvh items-center justify-center bg-background text-sm text-muted-foreground">
-        <Loader2Icon className="mr-2 size-4 animate-spin" /> Preparing patient intake…
-      </div>
-    );
+  if (
+    (isLoading && patients.length === 0) ||
+    (patients.length === 0 && creatingPatient)
+  ) {
+    return <LoadingState label="Preparing patient intake…" />;
   }
 
   if (!patient) {
-    return (
-      <div className="flex h-dvh items-center justify-center bg-background text-sm text-muted-foreground">
-        <Loader2Icon className="mr-2 size-4 animate-spin" /> Loading patient…
-      </div>
-    );
+    return <LoadingState label="Loading patient…" />;
   }
 
   return (
@@ -589,10 +651,16 @@ export function SuperstackApp() {
 
                   <DropdownMenuItem
                     className="flex flex-row items-center gap-2 !transition-none"
-                    onSelect={() => void handleCreatePatient()}
+                    onSelect={() => {
+                      handleCreatePatient().catch((error) => {
+                        console.error("Failed to create patient:", error);
+                      });
+                    }}
                   >
                     <PlusIcon size={16} />
-                    <span>{creatingPatient ? "Creating patient..." : "New Patient"}</span>
+                    <span>
+                      {creatingPatient ? "Creating patient..." : "New Patient"}
+                    </span>
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -603,7 +671,11 @@ export function SuperstackApp() {
                 <Button
                   className="rounded-lg"
                   disabled={!patient.setupComplete && !canFinishSetup}
-                  onClick={() => void handleFinishSetup()}
+                  onClick={() => {
+                    handleFinishSetup().catch((error) => {
+                      console.error("Failed to finish patient setup:", error);
+                    });
+                  }}
                   size="default"
                   type="button"
                 >
@@ -628,16 +700,14 @@ export function SuperstackApp() {
               isGraphVisible={artifact.isVisible}
               key={`${patient.id}-${activeMode}`}
               mode={activeMode}
-              onBackToConsult={() => setModeOverride("consult")}
-              onFinishSetup={handleFinishSetup}
+              onCanFinishSetupChange={setLiveCanFinishSetup}
               onRefreshList={mutatePatients}
               onRefreshPatient={mutatePatient}
               onRegenerateGraph={handleRegenerateGraph}
               onShowCurrentGraph={handleShowCurrentGraph}
-              onCanFinishSetupChange={setLiveCanFinishSetup}
               patient={patient}
             />
-            <GraphPanel />
+            <ArtifactPanel />
           </div>
         </div>
       </div>

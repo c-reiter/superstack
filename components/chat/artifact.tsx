@@ -16,6 +16,7 @@ import { useWindowSize } from "usehooks-ts";
 import { codeArtifact } from "@/artifacts/code/client";
 import { graphArtifact } from "@/artifacts/graph/client";
 import { imageArtifact } from "@/artifacts/image/client";
+import { openuiArtifact } from "@/artifacts/openui/client";
 import { sheetArtifact } from "@/artifacts/sheet/client";
 import { textArtifact } from "@/artifacts/text/client";
 import { useArtifact } from "@/hooks/use-artifact";
@@ -36,6 +37,7 @@ export const artifactDefinitions = [
   imageArtifact,
   sheetArtifact,
   graphArtifact,
+  openuiArtifact,
 ];
 export type ArtifactKind = (typeof artifactDefinitions)[number]["kind"];
 
@@ -93,6 +95,7 @@ function PureArtifact({
 
   const shouldFetchDocuments =
     artifact.kind !== "graph" &&
+    artifact.kind !== "openui" &&
     artifact.documentId !== "init" &&
     artifact.status !== "streaming";
 
@@ -171,7 +174,7 @@ function PureArtifact({
 
           const currentDocument = currentDocuments.at(-1);
 
-          if (!currentDocument || !currentDocument.content) {
+          if (!currentDocument?.content) {
             setIsContentDirty(false);
             return currentDocuments;
           }
@@ -273,7 +276,8 @@ function PureArtifact({
       ? currentVersionIndex === documents.length - 1
       : true;
 
-  const supportsVersioning = artifact.kind !== "graph";
+  const supportsVersioning =
+    artifact.kind !== "graph" && artifact.kind !== "openui";
 
   const { width: windowWidth, height: windowHeight } = useWindowSize();
   const isMobile = windowWidth ? windowWidth < 768 : false;

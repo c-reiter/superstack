@@ -4,6 +4,7 @@ import { generateCurrentPatientGraph } from "@/lib/ai/superstack-graph";
 import { getPatientById } from "@/lib/db/queries";
 import { getHydratedPatient, savePatientRecord } from "@/lib/superstack/store";
 import { emptyPatientProfile } from "@/lib/superstack/types";
+import type { ChatMessage } from "@/lib/types";
 
 const patientPatchSchema = z.object({
   name: z.string().optional(),
@@ -13,6 +14,18 @@ const patientPatchSchema = z.object({
   intakeMessages: z.any().optional(),
   consultMessages: z.any().optional(),
 });
+
+function hasMeaningfulConversation(messages: ChatMessage[]) {
+  return messages.some(
+    (message) =>
+      message.role === "user" &&
+      message.parts.some(
+        (part) =>
+          (part.type === "text" && part.text.trim().length > 0) ||
+          part.type === "file"
+      )
+  );
+}
 
 export async function GET(
   _request: Request,
@@ -36,8 +49,8 @@ export async function GET(
   if (
     patient &&
     patient.currentGraph === null &&
-    (patient.intakeMessages.length > 0 ||
-      patient.consultMessages.length > 0 ||
+    (hasMeaningfulConversation(patient.intakeMessages) ||
+      hasMeaningfulConversation(patient.consultMessages) ||
       patient.profile.diagnoses.length > 0 ||
       patient.profile.medications.length > 0 ||
       patient.profile.supplements.length > 0 ||

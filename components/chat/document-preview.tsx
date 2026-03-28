@@ -27,7 +27,9 @@ import { ImageEditor } from "./image-editor";
 import { SpreadsheetEditor } from "./sheet-editor";
 import { Editor } from "./text-editor";
 
-type PreviewArtifactKind = Exclude<ArtifactKind, "graph">;
+type PreviewArtifactKind = Exclude<ArtifactKind, "graph" | "openui">;
+
+const DOCUMENT_PREVIEW_HEIGHT = "h-[257px]";
 
 type DocumentToolOutput = {
   id: string;
@@ -40,6 +42,32 @@ type DocumentPreviewProps = {
   isReadonly: boolean;
   result?: Partial<DocumentToolOutput>;
   args?: Partial<DocumentToolOutput> & { isUpdate?: boolean };
+};
+
+const getPreviewArtifactKind = (
+  artifactKind: ArtifactKind
+): PreviewArtifactKind =>
+  artifactKind === "graph" || artifactKind === "openui" ? "text" : artifactKind;
+
+const createStreamingPreviewDocument = (
+  artifact: UIArtifact
+): Document | null => {
+  if (
+    artifact.status !== "streaming" ||
+    artifact.kind === "graph" ||
+    artifact.kind === "openui"
+  ) {
+    return null;
+  }
+
+  return {
+    title: artifact.title,
+    kind: artifact.kind,
+    content: artifact.content,
+    id: artifact.documentId,
+    createdAt: new Date(),
+    userId: "noop",
+  };
 };
 
 export function DocumentPreview({
@@ -79,9 +107,7 @@ export function DocumentPreview({
 
   if (isDocumentsFetching) {
     const kind =
-      result?.kind ??
-      args?.kind ??
-      (artifact.kind === "graph" ? "text" : artifact.kind);
+      result?.kind ?? args?.kind ?? getPreviewArtifactKind(artifact.kind);
     const title = result?.title ?? args?.title ?? artifact.title;
 
     return (
@@ -97,28 +123,21 @@ export function DocumentPreview({
             <div className="w-8" />
           </div>
         )}
-        <div className="h-[257px] overflow-hidden rounded-b-2xl border border-t-0 border-border/50 bg-muted p-6">
+        <div
+          className={`${DOCUMENT_PREVIEW_HEIGHT} overflow-hidden rounded-b-2xl border border-t-0 border-border/50 bg-muted p-6`}
+        >
           <InlineDocumentSkeleton />
         </div>
       </div>
     );
   }
 
-  const document: Document | null = previewDocument
-    ? previewDocument
-    : artifact.status === "streaming" && artifact.kind !== "graph"
-      ? {
-          title: artifact.title,
-          kind: artifact.kind,
-          content: artifact.content,
-          id: artifact.documentId,
-          createdAt: new Date(),
-          userId: "noop",
-        }
-      : null;
+  const document = previewDocument ?? createStreamingPreviewDocument(artifact);
 
   if (!document) {
-    return <LoadingSkeleton artifactKind={artifact.kind === "graph" ? "text" : artifact.kind} />;
+    return (
+      <LoadingSkeleton artifactKind={getPreviewArtifactKind(artifact.kind)} />
+    );
   }
 
   return (
@@ -138,7 +157,11 @@ export function DocumentPreview({
   );
 }
 
-const LoadingSkeleton = ({ artifactKind }: { artifactKind: PreviewArtifactKind }) => (
+const LoadingSkeleton = ({
+  artifactKind,
+}: {
+  artifactKind: PreviewArtifactKind;
+}) => (
   <div className="w-full max-w-[450px]">
     <div className="flex flex-row items-center justify-between gap-2 rounded-t-2xl border border-b-0 border-border/50 px-4 py-3 dark:bg-muted">
       <div className="flex flex-row items-center gap-2.5">
@@ -149,10 +172,14 @@ const LoadingSkeleton = ({ artifactKind }: { artifactKind: PreviewArtifactKind }
     </div>
     {artifactKind === "image" ? (
       <div className="overflow-hidden rounded-b-2xl border border-t-0 border-border/50 bg-muted">
-        <div className="h-[257px] w-full animate-pulse bg-muted-foreground/10" />
+        <div
+          className={`${DOCUMENT_PREVIEW_HEIGHT} w-full animate-pulse bg-muted-foreground/10`}
+        />
       </div>
     ) : (
-      <div className="h-[257px] overflow-hidden rounded-b-2xl border border-t-0 border-border/50 bg-muted p-6">
+      <div
+        className={`${DOCUMENT_PREVIEW_HEIGHT} overflow-hidden rounded-b-2xl border border-t-0 border-border/50 bg-muted p-6`}
+      >
         <InlineDocumentSkeleton />
       </div>
     )}
@@ -260,7 +287,7 @@ const DocumentContent = ({ document }: { document: Document }) => {
   const { artifact } = useArtifact();
 
   const containerClassName = cn(
-    "h-[257px] overflow-hidden rounded-b-2xl border border-t-0 border-border/50 dark:bg-muted",
+    `${DOCUMENT_PREVIEW_HEIGHT} overflow-hidden rounded-b-2xl border border-t-0 border-border/50 dark:bg-muted`,
     {
       "p-4 sm:px-10 sm:py-10": document.kind === "text",
       "p-0": document.kind === "code",

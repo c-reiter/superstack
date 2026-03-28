@@ -1,5 +1,4 @@
 import { generateCurrentPatientGraph } from "@/lib/ai/superstack-graph";
-import type { ChatMessage } from "@/lib/types";
 import {
   createPatient as createPatientRow,
   getPatientById,
@@ -7,6 +6,9 @@ import {
   updatePatientById,
 } from "@/lib/db/queries";
 import type { Patient as DbPatient } from "@/lib/db/schema";
+import type { ChatMessage } from "@/lib/types";
+import { createInitialIntakeMessages } from "./intake";
+import { getNextPlaceholderPatientName } from "./naming";
 import {
   emptyPatientProfile,
   type PatientGraph,
@@ -66,15 +68,21 @@ export async function getHydratedPatient(id: string) {
   return patient ? hydratePatient(patient) : null;
 }
 
-export async function createPatient(userId: string, name = "New patient") {
+export async function createPatient(userId: string, name?: string) {
+  const resolvedName =
+    name?.trim() ||
+    getNextPlaceholderPatientName(
+      (await getPatientsByUserId({ userId })).map((patient) => patient.name)
+    );
+
   const patient = await createPatientRow({
     userId,
-    name,
+    name: resolvedName,
     summary: "",
     setupComplete: false,
     profile: JSON.stringify(emptyPatientProfile()),
     currentGraph: JSON.stringify(null),
-    intakeMessages: JSON.stringify([]),
+    intakeMessages: JSON.stringify(createInitialIntakeMessages()),
     consultMessages: JSON.stringify([]),
   });
 
@@ -255,7 +263,9 @@ const demoPatientSeeds: Array<{
 
 export async function ensureDemoPatients(userId: string) {
   const existingPatients = await getPatientsByUserId({ userId });
-  const existingNames = new Set(existingPatients.map((patient) => patient.name));
+  const existingNames = new Set(
+    existingPatients.map((patient) => patient.name)
+  );
 
   for (const seed of demoPatientSeeds) {
     if (existingNames.has(seed.name)) {
@@ -280,4 +290,3 @@ export async function ensureDemoPatients(userId: string) {
     });
   }
 }
-
