@@ -1,5 +1,8 @@
+import { generateObject } from "ai";
 import { z } from "zod";
 import { DEFAULT_CHAT_MODEL } from "@/lib/ai/models";
+import { getLanguageModel } from "@/lib/ai/providers";
+import { currentGraphEdgeGenerationPrompt } from "@/lib/ai/superstack-prompts";
 import type { PatientGraph, PatientProfile } from "@/lib/superstack/types";
 import type { ChatMessage } from "@/lib/types";
 
@@ -299,321 +302,101 @@ function buildNodes(profile: PatientProfile) {
   };
 }
 
-function findNodesByType(nodes: GraphNode[], type: GraphNodeType) {
-  return nodes.filter((node) => node.type === type);
-}
+const graphEdgeListSchema = z.object({
+  edges: z.array(graphEdgeSchema),
+});
 
-function nodeMatches(node: GraphNode, pattern: RegExp) {
-  return pattern.test(
-    normalizeForMatch(
-      [node.label, node.subtitle ?? undefined].filter(Boolean).join(" ")
-    )
-  );
-}
+const EDGE_SEVERITY_RANK: Record<GraphEdge["severity"], number> = {
+  info: 0,
+  low: 1,
+  moderate: 2,
+  high: 3,
+};
 
-function findNodes(
-  nodes: GraphNode[],
-  types: GraphNodeType | GraphNodeType[],
-  pattern: RegExp
-) {
-  const allowedTypes = new Set(Array.isArray(types) ? types : [types]);
-  return nodes.filter(
-    (node) => allowedTypes.has(node.type) && nodeMatches(node, pattern)
-  );
-}
+function normalizeModelEdges(nodes: GraphNode[], rawEdges: GraphEdge[]) {
+  const nodeMap = new Map(nodes.map((node) => [node.id, node]));
+  const bestEdgeByPair = new Map<string, GraphEdge>();
 
-function findFirstNode(
-  nodes: GraphNode[],
-  type: GraphNodeType,
-  pattern: RegExp
-) {
-  return nodes.find((node) => node.type === type && nodeMatches(node, pattern));
-}
+  for (const edge of rawEdges) {
+    const source = nodeMap.get(edge.source);
+    const target = nodeMap.get(edge.target);
 
-function connectIndicationDrivenEdges(
-  profile: PatientProfile,
-  nodes: GraphNode[],
-  edges: GraphEdge[]
-) {
-  const symptomNodes = findNodesByType(nodes, "symptom");
-  const goalNodes = findNodesByType(nodes, "goal");
-  const conditionNodes = findNodesByType(nodes, "condition");
-
-  for (const item of [...profile.medications, ...profile.supplements]) {
-    const source = nodes.find(
-      (node) =>
-        normalizeForMatch(node.label) === normalizeForMatch(item.name) &&
-        (node.type === "medication" || node.type === "supplement")
-    );
-
-    if (!source) {
+    if (!source || !target || source.id === target.id) {
       continue;
     }
 
-    const indication = normalizeForMatch(item.indication);
-    if (!indication) {
-      continue;
-    }
+    const pairKey = [source.id, target.id].sort().join("__");
+    const existingEdge = bestEdgeByPair.get(pairKey);
 
-    for (const target of [...symptomNodes, ...goalNodes, ...conditionNodes]) {
-      if (
-        indication.includes(normalizeForMatch(target.label)) ||
-        normalizeForMatch(target.label).includes(indication)
-      ) {
-        addEdge(
-          edges,
-          source,
-          target,
-          "used for",
-          `${source.label} is being used in relation to ${target.label}.`,
-          "info"
-        );
-      }
-    }
-  }
-}
-
-function connectMedicationInteractionEdges(
-  nodes: GraphNode[],
-  edges: GraphEdge[]
-) {
-  const stimulantNodes = findNodes(
-    nodes,
-    ["medication", "supplement"],
-    /(ritalin|methylphenidate|concerta|focalin|dexmethylphenidate|adderall|amphetamine|dextroamphetamine|dexamphetamine|vyvanse|lisdexamfetamine|modafinil|armodafinil)/
-  );
-  const yohimbineNodes = findNodes(
-    nodes,
-    ["medication", "supplement"],
-    /yohimbine/
-  );
-  const maobNodes = findNodes(
-    nodes,
-    ["medication", "supplement"],
-    /(mao-b|maob|selegiline|rasagiline|safinamide|azilect|eldepryl|zelapar|emsam|xadago)/
-  );
-
-  for (const stimulant of stimulantNodes) {
-    for (const yohimbine of yohimbineNodes) {
-      addEdge(
-        edges,
-        stimulant,
-        yohimbine,
-        "interaction risk",
-        "This combination can amplify sympathetic tone and may increase heart rate, blood pressure, anxiety, tremor, and insomnia more than either agent alone.",
-        "high"
-      );
-    }
-
-    for (const maob of maobNodes) {
-      addEdge(
-        edges,
-        stimulant,
-        maob,
-        "interaction risk",
-        "A stimulant layered with MAO-B inhibition can increase catecholamine signaling and may raise blood pressure, heart rate, agitation, and insomnia; risk increases if MAO-B selectivity is reduced or exposure is higher.",
-        "high"
-      );
+    if (
+      !existingEdge ||
+      EDGE_SEVERITY_RANK[edge.severity] >
+        EDGE_SEVERITY_RANK[existingEdge.severity]
+    ) {
+      bestEdgeByPair.set(pairKey, edge);
     }
   }
 
-  for (const yohimbine of yohimbineNodes) {
-    for (const maob of maobNodes) {
-      addEdge(
-        edges,
-        yohimbine,
-        maob,
-        "interaction risk",
-        "Yohimbine is sympathomimetic, so combining it with MAO-B inhibition can further amplify adrenergic effects and hypertension risk.",
-        "high"
-      );
-    }
-  }
-}
-
-function connectKnownClinicalEdges(nodes: GraphNode[], edges: GraphEdge[]) {
-  const hairLoss = findFirstNode(nodes, "symptom", /hair loss/);
-  const fatigue = findFirstNode(nodes, "symptom", /(fatigue|low energy)/);
-  const cognition = findFirstNode(nodes, "symptom", /(cognitive|brain fog)/);
-  const sleepGoal = findFirstNode(nodes, "goal", /(sleep|recovery)/);
-  const cardioGoal = findFirstNode(nodes, "goal", /(cardiovascular|cardio)/);
-  const hairGoal = findFirstNode(nodes, "goal", /hair loss|address hair loss/);
-
-  const minoxidil = findFirstNode(nodes, "medication", /minoxidil/);
-  const magnesium = findFirstNode(nodes, "supplement", /magnesium/);
-  const apigenin = findFirstNode(nodes, "supplement", /apigenin/);
-  const vitaminD = findFirstNode(nodes, "supplement", /vitamin d/);
-
-  const ferritin = findFirstNode(nodes, "lab", /ferritin/);
-  const prolactin = findFirstNode(nodes, "lab", /prolactin/);
-  const estradiol = findFirstNode(nodes, "lab", /estradiol/);
-  const vitaminDLab = findFirstNode(
-    nodes,
-    "lab",
-    /(25-oh vitamin d|vitamin d)/
-  );
-  const lpa = findFirstNode(nodes, "lab", /(lipoprotein\(a\)|lp\(a\))/);
-
-  if (minoxidil && hairLoss) {
-    addEdge(
-      edges,
-      minoxidil,
-      hairLoss,
-      "targets",
-      "Topical minoxidil is being used to address hair loss.",
-      "info"
-    );
-  }
-
-  if (minoxidil && hairGoal) {
-    addEdge(
-      edges,
-      minoxidil,
-      hairGoal,
-      "supports goal",
-      "Minoxidil directly relates to the goal of improving hair loss.",
-      "info"
-    );
-  }
-
-  if (magnesium && sleepGoal) {
-    addEdge(
-      edges,
-      magnesium,
-      sleepGoal,
-      "may support",
-      "Magnesium is commonly used in support of sleep quality and recovery.",
-      "low"
-    );
-  }
-
-  if (apigenin && sleepGoal) {
-    addEdge(
-      edges,
-      apigenin,
-      sleepGoal,
-      "may support",
-      "Apigenin is often used as a sleep-support supplement.",
-      "low"
-    );
-  }
-
-  if (vitaminD && vitaminDLab) {
-    addEdge(
-      edges,
-      vitaminD,
-      vitaminDLab,
-      "addresses",
-      "Vitamin D supplementation directly relates to the measured vitamin D level.",
-      "info"
-    );
-  }
-
-  if (ferritin && fatigue) {
-    addEdge(
-      edges,
-      ferritin,
-      fatigue,
-      "may contribute",
-      "Low or functionally low ferritin can contribute to fatigue and low energy.",
-      "moderate"
-    );
-  }
-
-  if (ferritin && hairLoss) {
-    addEdge(
-      edges,
-      ferritin,
-      hairLoss,
-      "may contribute",
-      "Lower iron stores can be relevant to ongoing hair shedding or poor hair recovery.",
-      "moderate"
-    );
-  }
-
-  if (prolactin && fatigue) {
-    addEdge(
-      edges,
-      prolactin,
-      fatigue,
-      "may contribute",
-      "Elevated prolactin can be relevant when fatigue and low drive are present.",
-      "moderate"
-    );
-  }
-
-  if (prolactin && cognition) {
-    addEdge(
-      edges,
-      prolactin,
-      cognition,
-      "may contribute",
-      "Prolactin elevation can be part of the hormonal context behind reduced motivation or cognitive underperformance.",
-      "low"
-    );
-  }
-
-  if (estradiol && hairLoss) {
-    addEdge(
-      edges,
-      estradiol,
-      hairLoss,
-      "hormonal context",
-      "Estradiol is part of the endocrine context worth reviewing when hair loss and other hormone-linked symptoms are present.",
-      "low"
-    );
-  }
-
-  if (vitaminDLab && fatigue) {
-    addEdge(
-      edges,
-      vitaminDLab,
-      fatigue,
-      "may contribute",
-      "Suboptimal vitamin D status can be relevant to low energy and recovery complaints.",
-      "low"
-    );
-  }
-
-  if (lpa && cardioGoal) {
-    addEdge(
-      edges,
-      lpa,
-      cardioGoal,
-      "risk marker",
-      "Elevated lipoprotein(a) is relevant to long-term cardiovascular risk reduction goals.",
-      "moderate"
-    );
-  }
-}
-
-function buildGraphFromProfile(profile: PatientProfile): PatientGraph {
-  const { nodes } = buildNodes(profile);
   const edges: GraphEdge[] = [];
 
-  connectIndicationDrivenEdges(profile, nodes, edges);
-  connectMedicationInteractionEdges(nodes, edges);
-  connectKnownClinicalEdges(nodes, edges);
+  for (const edge of bestEdgeByPair.values()) {
+    const source = nodeMap.get(edge.source);
+    const target = nodeMap.get(edge.target);
+
+    if (!source || !target) {
+      continue;
+    }
+
+    addEdge(edges, source, target, edge.label, edge.explanation, edge.severity);
+  }
+
+  return edges;
+}
+
+async function buildGraphFromProfile(
+  profile: PatientProfile,
+  modelId: string
+): Promise<PatientGraph> {
+  const { nodes } = buildNodes(profile);
+
+  if (nodes.length === 0) {
+    return {
+      mode: "current",
+      title: "Current profile graph",
+      subtitle: "No structured graphable profile data available yet.",
+      nodes: [],
+      edges: [],
+      notes: [
+        "This graph is generated from the structured patient profile only.",
+      ],
+    };
+  }
+
+  const { object } = await generateObject({
+    model: getLanguageModel(modelId),
+    prompt: currentGraphEdgeGenerationPrompt({ profile, nodes }),
+    schema: graphEdgeListSchema,
+  });
 
   return {
     mode: "current",
     title: "Current profile graph",
     subtitle:
-      "Direct relationships derived from the structured patient profile.",
+      "Direct relationships inferred from the structured patient profile.",
     nodes,
-    edges,
+    edges: normalizeModelEdges(nodes, object.edges),
     notes: [
       "This graph is generated from the structured patient profile only.",
-      "Only direct or clearly relevant clinical relationships are connected; isolated nodes are expected.",
+      "Edges reflect clinically meaningful direct relationships or interaction risks rather than cosmetic connectivity.",
     ],
   };
 }
 
-export function generateCurrentPatientGraph({
+export async function generateCurrentPatientGraph({
   profile,
   intakeMessages: _intakeMessages,
   consultMessages: _consultMessages,
-  modelId: _modelId = DEFAULT_CHAT_MODEL,
+  modelId = DEFAULT_CHAT_MODEL,
 }: {
   profile: PatientProfile;
   intakeMessages?: ChatMessage[];
@@ -621,11 +404,11 @@ export function generateCurrentPatientGraph({
   modelId?: string;
 }): Promise<PatientGraph> {
   try {
-    return Promise.resolve(buildGraphFromProfile(profile));
+    return await buildGraphFromProfile(profile, modelId);
   } catch (error) {
     console.error("Failed to generate current patient graph:", error);
 
-    return Promise.resolve({
+    return {
       mode: "current",
       title: "Current profile graph",
       subtitle:
@@ -633,6 +416,6 @@ export function generateCurrentPatientGraph({
       nodes: [],
       edges: [],
       notes: [],
-    });
+    };
   }
 }

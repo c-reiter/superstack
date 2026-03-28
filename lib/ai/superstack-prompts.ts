@@ -142,7 +142,7 @@ Consult response rules:
 - only call createGraph when the user explicitly asks to show, open, inspect, or visualize the graph / interactions
 - when you do call createGraph, include all relevant current stack items, conditions, symptoms, labs, diagnostics, and proposed interventions that matter to the question
 - do not miss high-signal pharmacology interactions just because the profile is sparse; if a clinically important drug-drug or drug-supplement interaction is present, it should appear in the graph
-- especially surface stimulant/sympathomimetic/MAOI interaction risks when they are present, including examples like methylphenidate or other stimulants with yohimbine and MAO-B inhibitors
+- evaluate the full stack generically rather than looking for hardcoded examples; reason across all medications, supplements, hormones, peptides, conditions, symptoms, labs, and diagnostics in scope
 - edges must only exist between nodes with a real direct clinical relationship or interaction; never connect unrelated nodes just to make the graph look fuller
 - isolated nodes are allowed and expected when they do not directly interact with anything else in scope
 - prefer at most one artifact tool per answer unless the user clearly asks for both a graph and a structured artifact
@@ -153,6 +153,43 @@ Consult response rules:
 
 Saved patient profile:
 ${JSON.stringify(profile, null, 2)}`;
+
+export const currentGraphEdgeGenerationPrompt = ({
+  profile,
+  nodes,
+}: {
+  profile: PatientProfile;
+  nodes: Array<{
+    id: string;
+    label: string;
+    type: string;
+    subtitle?: string | null;
+  }>;
+}) => `${doctorVoice}
+
+Generate the edge list for a patient interaction graph from the structured patient profile and provided nodes.
+
+Hard rules:
+- use only the supplied profile and node list
+- infer interactions generically; do not rely on hardcoded drug names, canned pairs, or disease-specific shortcuts
+- consider the full stack: medications, supplements, hormones, peptides, conditions, symptoms, labs, diagnostics, and goals
+- detect clinically important direct relationships, especially true drug-drug, drug-supplement, drug-condition, drug-symptom, lab-symptom, lab-condition, diagnostic-condition, and monitoring-relevant relationships
+- explicitly reason about pharmacodynamic and pharmacokinetic interactions across the whole stack, including additive toxicity, opposing effects, contraindications, blood pressure and heart-rate effects, QT risk, seizure-threshold effects, bleeding risk, sedation, stimulation, serotonin, dopamine, norepinephrine, cholinergic effects, endocrine effects, and meaningful lab or monitoring implications when relevant
+- create an edge only when the relationship is clinically meaningful and direct
+- do not create cosmetic or filler edges
+- isolated nodes are correct when no direct relationship exists
+- use the provided node ids exactly as source and target values
+- never invent nodes or ids
+- at most one edge per node pair; choose the most clinically important relationship
+- label must be short, ideally 1-3 words
+- explanation should be plain-language, specific, and concise
+- severity must reflect clinical significance: info, low, moderate, or high
+
+Profile:
+${JSON.stringify(profile, null, 2)}
+
+Available nodes:
+${JSON.stringify(nodes, null, 2)}`;
 
 export const profileUpdateSystemPrompt = ({
   existingProfile,
