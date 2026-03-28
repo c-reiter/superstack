@@ -31,14 +31,14 @@ const TYPE_LABELS: Record<PatientGraph["nodes"][number]["type"], string> = {
 };
 
 const TYPE_STYLES: Record<PatientGraph["nodes"][number]["type"], string> = {
-  medication: "border-sky-400/60 bg-sky-900/86 text-sky-100",
-  supplement: "border-emerald-400/60 bg-emerald-900/86 text-emerald-100",
-  condition: "border-rose-400/60 bg-rose-900/86 text-rose-100",
-  lab: "border-amber-400/60 bg-amber-900/86 text-amber-100",
-  goal: "border-violet-400/60 bg-violet-900/86 text-violet-100",
-  symptom: "border-orange-400/60 bg-orange-900/86 text-orange-100",
-  recommendation: "border-cyan-400/60 bg-cyan-900/86 text-cyan-100",
-  diagnostic: "border-yellow-400/60 bg-yellow-900/86 text-yellow-100",
+  medication: "border-sky-400/60 bg-sky-900/78 text-sky-100",
+  supplement: "border-emerald-400/60 bg-emerald-900/78 text-emerald-100",
+  condition: "border-rose-400/60 bg-rose-900/78 text-rose-100",
+  lab: "border-amber-400/60 bg-amber-900/78 text-amber-100",
+  goal: "border-violet-400/60 bg-violet-900/78 text-violet-100",
+  symptom: "border-orange-400/60 bg-orange-900/78 text-orange-100",
+  recommendation: "border-cyan-400/60 bg-cyan-900/78 text-cyan-100",
+  diagnostic: "border-yellow-400/60 bg-yellow-900/78 text-yellow-100",
 };
 
 const EDGE_STYLES = {
