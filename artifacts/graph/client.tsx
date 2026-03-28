@@ -178,6 +178,59 @@ function getConnectedComponents(
   return components;
 }
 
+function resolveNodeOverlaps(nodes: PositionedNode[]) {
+  const minX = NODE_WIDTH / 2 + 40;
+  const maxX = VIRTUAL_WIDTH - NODE_WIDTH / 2 - 40;
+
+  for (let iteration = 0; iteration < 80; iteration += 1) {
+    let moved = false;
+
+    for (let index = 0; index < nodes.length; index += 1) {
+      for (
+        let otherIndex = index + 1;
+        otherIndex < nodes.length;
+        otherIndex += 1
+      ) {
+        const node = nodes[index];
+        const other = nodes[otherIndex];
+        const dx = other.x - node.x;
+        const dy = other.y - node.y;
+        const overlapX = NODE_WIDTH - Math.abs(dx);
+        const overlapY = (node.height + other.height) / 2 + 20 - Math.abs(dy);
+
+        if (overlapX <= 0 || overlapY <= 0) {
+          continue;
+        }
+
+        moved = true;
+
+        const resolveOnX =
+          overlapX < overlapY && node.x > minX && other.x < maxX;
+
+        if (resolveOnX) {
+          const shiftX = overlapX / 2 + 4;
+          const direction = dx >= 0 ? 1 : -1;
+
+          node.x = clamp(node.x - direction * shiftX, minX, maxX);
+          other.x = clamp(other.x + direction * shiftX, minX, maxX);
+        } else {
+          const shiftY = overlapY / 2 + 6;
+          const direction = dy >= 0 ? 1 : -1;
+
+          node.y -= direction * shiftY;
+          other.y += direction * shiftY;
+          node.y = Math.max(node.y, node.height / 2 + 40);
+          other.y = Math.max(other.y, other.height / 2 + 40);
+        }
+      }
+    }
+
+    if (!moved) {
+      break;
+    }
+  }
+}
+
 function positionNodes(graph: PatientGraph) {
   const nodes = graph.nodes.map((node) => ({
     ...node,
@@ -445,6 +498,8 @@ function positionNodes(graph: PatientGraph) {
     );
     node.y = Math.max(node.y, node.height / 2 + 40);
   }
+
+  resolveNodeOverlaps(nodes);
 
   const graphHeight = Math.max(
     MIN_GRAPH_HEIGHT,
