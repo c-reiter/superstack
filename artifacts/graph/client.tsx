@@ -585,7 +585,7 @@ export function GraphCanvas({ graph }: { graph: PatientGraph }) {
   }, [setZoomAroundPoint, viewportRef]);
 
   return (
-    <div className="flex h-full min-h-0 min-w-0 max-w-full flex-col overflow-hidden overflow-x-hidden text-foreground">
+    <div className="flex h-full min-h-0 min-w-0 max-w-full select-none flex-col overflow-hidden overflow-x-hidden text-foreground">
       <div className="shrink-0 border-b border-border/50 p-4">
         <div className="flex flex-wrap gap-2">
           {Object.entries(TYPE_LABELS).map(([type, label]) => (
@@ -639,7 +639,7 @@ export function GraphCanvas({ graph }: { graph: PatientGraph }) {
         </div>
 
         <div
-          className="no-scrollbar overscroll-behavior-contain absolute inset-0 min-w-0 max-w-full cursor-grab overflow-auto active:cursor-grabbing"
+          className="no-scrollbar overscroll-behavior-contain absolute inset-0 min-w-0 max-w-full cursor-grab overflow-auto select-none active:cursor-grabbing"
           onPointerCancel={() => {
             dragStateRef.current = null;
           }}
