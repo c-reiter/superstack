@@ -123,8 +123,8 @@ type Point = {
 const GRAPH_PADDING = 240;
 const MIN_ZOOM = 0.8;
 const MAX_ZOOM = 3.5;
-const WHEEL_ZOOM_SENSITIVITY = 0.0012;
-const GESTURE_ZOOM_DAMPING = 0.35;
+const WHEEL_ZOOM_SENSITIVITY = 0.0022;
+const GESTURE_ZOOM_DAMPING = 0.75;
 
 function estimateLineCount(text: string | undefined, charsPerLine: number) {
   if (!text) {
@@ -470,8 +470,8 @@ export function GraphCanvas({ graph }: { graph: PatientGraph }) {
         const delta = normalizeWheelDelta(event);
         const factor = clamp(
           Math.exp(-delta * WHEEL_ZOOM_SENSITIVITY),
-          0.97,
-          1.03
+          0.94,
+          1.06
         );
         setZoomAroundPoint(factor, event.clientX, event.clientY);
         return;
@@ -508,7 +508,7 @@ export function GraphCanvas({ graph }: { graph: PatientGraph }) {
 
       const currentScale = gestureEvent.scale ?? 1;
       const rawFactor = currentScale / lastGestureScale;
-      const factor = clamp(dampZoomFactor(rawFactor), 0.98, 1.02);
+      const factor = clamp(dampZoomFactor(rawFactor), 0.94, 1.06);
       lastGestureScale = currentScale;
 
       setZoomAroundPoint(factor, gestureEvent.clientX, gestureEvent.clientY);
