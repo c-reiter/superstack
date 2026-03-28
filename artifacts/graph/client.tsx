@@ -291,6 +291,7 @@ export function GraphCanvas({ graph }: { graph: PatientGraph }) {
   );
   const { ref: viewportRef, size } = useElementSize<HTMLDivElement>();
   const [zoom, setZoom] = useState(1);
+  const [isViewportHovered, setIsViewportHovered] = useState(false);
   const zoomRef = useRef(1);
   const pendingScrollRef = useRef<ViewportScroll | null>(null);
   const hasCenteredRef = useRef(false);
@@ -451,6 +452,48 @@ export function GraphCanvas({ graph }: { graph: PatientGraph }) {
     },
     [baseScale, height, size.height, size.width, viewportRef]
   );
+
+  useEffect(() => {
+    const element = viewportRef.current;
+    if (!element) {
+      return;
+    }
+
+    const handleMouseEnter = () => {
+      setIsViewportHovered(true);
+    };
+
+    const handleMouseLeave = () => {
+      setIsViewportHovered(false);
+    };
+
+    element.addEventListener("mouseenter", handleMouseEnter);
+    element.addEventListener("mouseleave", handleMouseLeave);
+
+    return () => {
+      element.removeEventListener("mouseenter", handleMouseEnter);
+      element.removeEventListener("mouseleave", handleMouseLeave);
+    };
+  }, [viewportRef]);
+
+  useEffect(() => {
+    if (!isViewportHovered) {
+      return;
+    }
+
+    const html = document.documentElement;
+    const body = document.body;
+    const previousHtmlOverscrollBehaviorX = html.style.overscrollBehaviorX;
+    const previousBodyOverscrollBehaviorX = body.style.overscrollBehaviorX;
+
+    html.style.overscrollBehaviorX = "none";
+    body.style.overscrollBehaviorX = "none";
+
+    return () => {
+      html.style.overscrollBehaviorX = previousHtmlOverscrollBehaviorX;
+      body.style.overscrollBehaviorX = previousBodyOverscrollBehaviorX;
+    };
+  }, [isViewportHovered]);
 
   useEffect(() => {
     const element = viewportRef.current;
