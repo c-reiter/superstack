@@ -167,8 +167,8 @@ function ArtifactPanel() {
       : "Structured recommendation artifact";
 
   return (
-    <aside className="hidden h-dvh w-[55%] shrink-0 border-l border-border/50 bg-sidebar xl:flex xl:flex-col">
-      <div className="flex h-14 items-center justify-between border-t border-b border-border/50 px-5">
+    <aside className="fixed inset-x-0 top-14 bottom-0 z-40 flex min-w-0 flex-col border-t border-border/50 bg-sidebar shadow-2xl xl:static xl:h-dvh xl:w-[55%] xl:shrink-0 xl:border-t-0 xl:border-l xl:shadow-none">
+      <div className="flex h-14 items-center justify-between border-b border-border/50 px-5">
         <div>
           <div className="text-sm font-semibold tracking-tight">
             {panelTitle}
@@ -196,7 +196,7 @@ function ArtifactPanel() {
       </div>
 
       <div
-        className={`min-h-0 flex-1 ${isGraphArtifact ? "overflow-hidden" : "overflow-auto"}`}
+        className={`min-h-0 min-w-0 flex-1 ${isGraphArtifact ? "overflow-hidden" : "overflow-auto"}`}
       >
         {isGraphArtifact && graph ? (
           <GraphCanvas graph={graph} />
@@ -218,10 +218,12 @@ type PatientChatPaneProps = {
   patient: PatientRecord;
   mode: "intake" | "consult";
   isGraphVisible: boolean;
+  hiddenArtifactLabel?: string | null;
   onRefreshPatient: () => Promise<unknown>;
   onRefreshList: () => Promise<unknown>;
   onRegenerateGraph: () => Promise<void>;
   onShowCurrentGraph: () => void;
+  onShowHiddenArtifact?: () => void;
   onCanFinishSetupChange: (canFinish: boolean) => void;
 };
 
@@ -229,10 +231,12 @@ function PatientChatPane({
   patient,
   mode,
   isGraphVisible,
+  hiddenArtifactLabel,
   onRefreshPatient,
   onRefreshList,
   onRegenerateGraph,
   onShowCurrentGraph,
+  onShowHiddenArtifact,
   onCanFinishSetupChange,
 }: PatientChatPaneProps) {
   const { setDataStream } = useDataStream();
@@ -384,7 +388,18 @@ function PatientChatPane({
                 {patient.setupComplete ? "Setup complete" : "Setup in progress"}
               </div>
 
-              {!isGraphVisible && (
+              {!isGraphVisible && hiddenArtifactLabel ? (
+                <Button
+                  className="rounded-full"
+                  onClick={onShowHiddenArtifact}
+                  size="sm"
+                  type="button"
+                  variant="outline"
+                >
+                  <EyeIcon className="size-4" />
+                  {hiddenArtifactLabel}
+                </Button>
+              ) : isGraphVisible ? null : (
                 <Button
                   className="rounded-full"
                   disabled={!patient.currentGraph}
@@ -603,6 +618,13 @@ export function SuperstackApp() {
     });
   }
 
+  function handleShowHiddenArtifact() {
+    setArtifact((current) => ({
+      ...current,
+      isVisible: true,
+    }));
+  }
+
   async function handleFinishSetup() {
     if (!patient) {
       return;
@@ -654,6 +676,15 @@ export function SuperstackApp() {
       console.error("Failed to generate graph after finishing setup:", error);
     });
   }
+
+  const hiddenArtifactLabel =
+    !artifact.isVisible && artifact.documentId !== "init" && artifact.content
+      ? artifact.kind === "openui"
+        ? "Show recommendation artifact"
+        : artifact.kind === "graph"
+          ? "Show graph"
+          : "Show artifact"
+      : null;
 
   if (
     (isLoading && patients.length === 0) ||
@@ -760,6 +791,7 @@ export function SuperstackApp() {
 
           <div className="flex min-h-0 flex-1 overflow-hidden rounded-tl-[12px]">
             <PatientChatPane
+              hiddenArtifactLabel={hiddenArtifactLabel}
               isGraphVisible={artifact.isVisible}
               key={`${patient.id}-${activeMode}`}
               mode={activeMode}
@@ -768,6 +800,7 @@ export function SuperstackApp() {
               onRefreshPatient={mutatePatient}
               onRegenerateGraph={handleRegenerateGraph}
               onShowCurrentGraph={handleShowCurrentGraph}
+              onShowHiddenArtifact={handleShowHiddenArtifact}
               patient={patient}
             />
             <ArtifactPanel />
