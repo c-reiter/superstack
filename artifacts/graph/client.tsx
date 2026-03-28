@@ -180,6 +180,11 @@ export function GraphCanvas({ graph }: { graph: PatientGraph }) {
     zoom: 1,
     pan: { x: 0, y: 0 },
   });
+  const viewStateRef = useRef<GraphViewState>({
+    zoom: 1,
+    pan: { x: 0, y: 0 },
+  });
+  const frameRef = useRef<number | null>(null);
   const dragStateRef = useRef<{
     pointerId: number;
     x: number;
@@ -232,68 +237,85 @@ export function GraphCanvas({ graph }: { graph: PatientGraph }) {
     [baseScale, height, size.height, size.width]
   );
 
+  const commitViewState = useCallback((next: GraphViewState) => {
+    viewStateRef.current = next;
+
+    if (frameRef.current !== null) {
+      return;
+    }
+
+    frameRef.current = requestAnimationFrame(() => {
+      frameRef.current = null;
+      setViewState(viewStateRef.current);
+    });
+  }, []);
+
   const setZoomAroundPoint = useCallback(
     (factor: number, clientX?: number, clientY?: number) => {
-      setViewState((current) => {
-        const nextZoom = clamp(current.zoom * factor, 0.8, 3.5);
+      const current = viewStateRef.current;
+      const nextZoom = clamp(current.zoom * factor, 0.8, 3.5);
 
-        if (!viewportRef.current || !size.width || !size.height) {
-          return {
-            zoom: nextZoom,
-            pan: clampPan(current.pan, nextZoom),
-          };
-        }
-
-        const rect = viewportRef.current.getBoundingClientRect();
-        const anchorX =
-          clientX === undefined
-            ? size.width / 2
-            : clientX - rect.left - size.width / 2;
-        const anchorY =
-          clientY === undefined
-            ? size.height / 2
-            : clientY - rect.top - size.height / 2;
-        const scaleRatio = nextZoom / current.zoom;
-
-        const nextPan = clampPan(
-          {
-            x: current.pan.x - (anchorX - current.pan.x) * (scaleRatio - 1),
-            y: current.pan.y - (anchorY - current.pan.y) * (scaleRatio - 1),
-          },
-          nextZoom
-        );
-
-        return {
+      if (!viewportRef.current || !size.width || !size.height) {
+        commitViewState({
           zoom: nextZoom,
-          pan: nextPan,
-        };
+          pan: clampPan(current.pan, nextZoom),
+        });
+        return;
+      }
+
+      const rect = viewportRef.current.getBoundingClientRect();
+      const anchorX =
+        clientX === undefined
+          ? size.width / 2
+          : clientX - rect.left - size.width / 2;
+      const anchorY =
+        clientY === undefined
+          ? size.height / 2
+          : clientY - rect.top - size.height / 2;
+      const scaleRatio = nextZoom / current.zoom;
+
+      const nextPan = clampPan(
+        {
+          x: current.pan.x - (anchorX - current.pan.x) * (scaleRatio - 1),
+          y: current.pan.y - (anchorY - current.pan.y) * (scaleRatio - 1),
+        },
+        nextZoom
+      );
+
+      commitViewState({
+        zoom: nextZoom,
+        pan: nextPan,
       });
     },
-    [clampPan, size.height, size.width, viewportRef]
+    [clampPan, commitViewState, size.height, size.width, viewportRef]
   );
 
   useEffect(() => {
-    setViewState(() => {
-      if (!graphVersion) {
-        return {
-          zoom: 1,
-          pan: { x: 0, y: 0 },
-        };
-      }
+    if (!graphVersion) {
+      return;
+    }
 
-      return {
-        zoom: 1,
-        pan: { x: 0, y: 0 },
-      };
+    commitViewState({
+      zoom: 1,
+      pan: { x: 0, y: 0 },
     });
-  }, [graphVersion]);
+  }, [commitViewState, graphVersion]);
 
   useEffect(() => {
-    setViewState((current) => ({
+    const current = viewStateRef.current;
+    commitViewState({
       ...current,
       pan: clampPan(current.pan, current.zoom),
-    }));
-  }, [clampPan]);
+    });
+  }, [clampPan, commitViewState]);
+
+  useEffect(() => {
+    return () => {
+      if (frameRef.current !== null) {
+        cancelAnimationFrame(frameRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const element = viewportRef.current;
@@ -347,7 +369,7 @@ export function GraphCanvas({ graph }: { graph: PatientGraph }) {
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden text-foreground">
-      <div className="shrink-0 border-b border-border/50 bg-background/70 p-4 backdrop-blur">
+      <div className="shrink-0 border-b border-border/50 bg-background p-4">
         <div className="flex flex-wrap gap-2">
           {Object.entries(TYPE_LABELS).map(([type, label]) => (
             <span
@@ -361,7 +383,7 @@ export function GraphCanvas({ graph }: { graph: PatientGraph }) {
       </div>
 
       <div
-        className="relative min-h-0 flex-1 overflow-hidden bg-[radial-gradient(circle_at_top,_rgba(148,163,184,0.08),_transparent_55%)] touch-none"
+        className="relative min-h-0 flex-1 overflow-hidden bg-background touch-none"
         onPointerCancel={() => {
           dragStateRef.current = null;
         }}
@@ -388,7 +410,9 @@ export function GraphCanvas({ graph }: { graph: PatientGraph }) {
             y: event.clientY,
           };
 
-          setViewState((current) => ({
+          const current = viewStateRef.current;
+
+          commitViewState({
             ...current,
             pan: clampPan(
               {
@@ -397,7 +421,7 @@ export function GraphCanvas({ graph }: { graph: PatientGraph }) {
               },
               current.zoom
             ),
-          }));
+          });
         }}
         onPointerUp={(event) => {
           if (dragStateRef.current?.pointerId === event.pointerId) {
@@ -414,7 +438,9 @@ export function GraphCanvas({ graph }: { graph: PatientGraph }) {
             return;
           }
 
-          setViewState((current) => ({
+          const current = viewStateRef.current;
+
+          commitViewState({
             ...current,
             pan: clampPan(
               {
@@ -423,15 +449,15 @@ export function GraphCanvas({ graph }: { graph: PatientGraph }) {
               },
               current.zoom
             ),
-          }));
+          });
         }}
         ref={viewportRef}
       >
-        <div className="absolute top-3 left-4 z-10 rounded-full border border-border/60 bg-background/90 px-3 py-1 text-[11px] text-muted-foreground shadow-sm">
+        <div className="absolute top-3 left-4 z-10 rounded-full border border-border/60 bg-background px-3 py-1 text-[11px] text-muted-foreground">
           Scroll to pan • Pinch or ⌘/ctrl + scroll to zoom
         </div>
 
-        <div className="absolute top-3 right-4 z-10 flex items-center gap-2 rounded-full border border-border/60 bg-background/90 p-1 shadow-sm">
+        <div className="absolute top-3 right-4 z-10 flex items-center gap-2 rounded-full border border-border/60 bg-background p-1">
           <button
             className="rounded-full px-2.5 py-1 text-xs text-foreground transition hover:bg-muted"
             onClick={() => setZoomAroundPoint(1 / 1.2)}
@@ -452,7 +478,7 @@ export function GraphCanvas({ graph }: { graph: PatientGraph }) {
           <button
             className="rounded-full px-2.5 py-1 text-[11px] text-muted-foreground transition hover:bg-muted hover:text-foreground"
             onClick={() =>
-              setViewState({
+              commitViewState({
                 zoom: 1,
                 pan: { x: 0, y: 0 },
               })
@@ -509,7 +535,7 @@ export function GraphCanvas({ graph }: { graph: PatientGraph }) {
 
             {positionedNodes.map((node) => (
               <div
-                className={`absolute w-40 -translate-x-1/2 -translate-y-1/2 rounded-2xl border px-3 py-2.5 shadow-lg backdrop-blur ${TYPE_STYLES[node.type]}`}
+                className={`absolute w-40 -translate-x-1/2 -translate-y-1/2 rounded-xl border px-3 py-2.5 ${TYPE_STYLES[node.type]}`}
                 key={node.id}
                 style={{
                   left: `${(node.x / VIRTUAL_WIDTH) * 100}%`,
@@ -533,21 +559,6 @@ export function GraphCanvas({ graph }: { graph: PatientGraph }) {
           </div>
         </div>
       </div>
-
-      {graph.notes && graph.notes.length > 0 ? (
-        <div className="shrink-0 border-t border-border/50 bg-background/80 px-4 py-3">
-          <div className="flex flex-wrap gap-2">
-            {graph.notes.map((note) => (
-              <div
-                className="rounded-full border border-border/50 bg-muted/60 px-3 py-1 text-[11px] text-muted-foreground"
-                key={note}
-              >
-                {note}
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 }
