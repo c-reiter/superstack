@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Artifact } from "@/components/chat/create-artifact";
 import {
   type OpenUIArtifactPayload,
@@ -180,14 +180,88 @@ function TieredRecommendationsView({
 }: {
   artifact: Extract<OpenUIArtifactPayload, { view: "tiered-recommendations" }>;
 }) {
+  const [selectedLevel, setSelectedLevel] = useState<number | "all">("all");
+  const [selectedRelevance, setSelectedRelevance] = useState<
+    "all" | "highest" | "high" | "moderate" | "low"
+  >("all");
+  const [query, setQuery] = useState("");
+
+  const normalizedQuery = query.trim().toLowerCase();
+  const sortedTiers = useMemo(
+    () => [...artifact.tiers].sort((left, right) => left.level - right.level),
+    [artifact.tiers]
+  );
+
+  const filteredTiers = useMemo(
+    () =>
+      sortedTiers
+        .filter((tier) =>
+          selectedLevel === "all" ? true : tier.level === selectedLevel
+        )
+        .map((tier) => ({
+          ...tier,
+          items: tier.items.filter((item) => {
+            const matchesRelevance =
+              selectedRelevance === "all"
+                ? true
+                : item.relevance === selectedRelevance;
+            const searchableText = [
+              item.name,
+              item.why,
+              item.rationale,
+              item.evidence,
+              item.nextStep,
+              ...(item.cautions ?? []),
+              ...(item.interactions ?? []),
+              tier.label,
+              tier.description,
+            ]
+              .filter(Boolean)
+              .join("\n")
+              .toLowerCase();
+            const matchesQuery =
+              normalizedQuery.length === 0 || searchableText.includes(normalizedQuery);
+
+            return matchesRelevance && matchesQuery;
+          }),
+        })),
+    [normalizedQuery, selectedLevel, selectedRelevance, sortedTiers]
+  );
+
+  const totalItems = useMemo(
+    () => sortedTiers.reduce((count, tier) => count + tier.items.length, 0),
+    [sortedTiers]
+  );
+  const filteredItemCount = useMemo(
+    () => filteredTiers.reduce((count, tier) => count + tier.items.length, 0),
+    [filteredTiers]
+  );
+  const highestPriorityCount = useMemo(
+    () =>
+      filteredTiers.reduce(
+        (count, tier) =>
+          count +
+          tier.items.filter((item) => item.relevance === "highest").length,
+        0
+      ),
+    [filteredTiers]
+  );
+  const populatedLevelCount = useMemo(
+    () => sortedTiers.filter((tier) => tier.items.length > 0).length,
+    [sortedTiers]
+  );
+
   return (
-    <div className="space-y-5 p-4 md:p-6">
+    <div className="space-y-5 p-4 pb-16 md:p-6 md:pb-20">
       <div className="flex flex-wrap items-center gap-2">
         <span className="rounded-full border border-border/60 bg-card/70 px-3 py-1 text-[11px] font-medium text-muted-foreground">
           OpenUI recommendation artifact
         </span>
         <span className="rounded-full border border-border/60 bg-card/40 px-3 py-1 text-[11px] text-muted-foreground">
           Levels 0–5
+        </span>
+        <span className="rounded-full border border-border/60 bg-card/40 px-3 py-1 text-[11px] text-muted-foreground">
+          {filteredItemCount} of {totalItems} recommendations shown
         </span>
       </div>
 
@@ -202,8 +276,127 @@ function TieredRecommendationsView({
         </div>
       ) : null}
 
+      <div className="grid gap-3 md:grid-cols-3">
+        <div className="rounded-2xl border border-border/50 bg-card/35 p-4 shadow-[var(--shadow-card)]">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+            Visible recommendations
+          </div>
+          <div className="mt-2 text-2xl font-semibold tracking-tight text-foreground">
+            {filteredItemCount}
+          </div>
+        </div>
+        <div className="rounded-2xl border border-border/50 bg-card/35 p-4 shadow-[var(--shadow-card)]">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+            Highest-priority items
+          </div>
+          <div className="mt-2 text-2xl font-semibold tracking-tight text-foreground">
+            {highestPriorityCount}
+          </div>
+        </div>
+        <div className="rounded-2xl border border-border/50 bg-card/35 p-4 shadow-[var(--shadow-card)]">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+            Populated levels
+          </div>
+          <div className="mt-2 text-2xl font-semibold tracking-tight text-foreground">
+            {populatedLevelCount} / 6
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-4 rounded-3xl border border-border/50 bg-card/30 p-4 shadow-[var(--shadow-card)] md:p-5">
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
+          <div className="space-y-2">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+              Focus level
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {(["all", 0, 1, 2, 3, 4, 5] as const).map((level) => {
+                const isActive = selectedLevel === level;
+                const label = level === "all" ? "All levels" : `Level ${level}`;
+
+                return (
+                  <button
+                    className={cn(
+                      "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                      isActive
+                        ? "border-foreground/20 bg-foreground text-background"
+                        : "border-border/60 bg-background/80 text-muted-foreground hover:text-foreground"
+                    )}
+                    key={String(level)}
+                    onClick={() => setSelectedLevel(level)}
+                    type="button"
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <label className="block xl:w-[280px]">
+            <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+              Search recommendations
+            </div>
+            <input
+              className="h-10 w-full rounded-2xl border border-border/60 bg-background/85 px-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground/50 focus:border-foreground/20"
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search by intervention, rationale, caution..."
+              value={query}
+            />
+          </label>
+        </div>
+
+        <div className="space-y-2">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+            Relevance filter
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {([
+              "all",
+              "highest",
+              "high",
+              "moderate",
+              "low",
+            ] as const).map((relevance) => {
+              const isActive = selectedRelevance === relevance;
+              const pillLabel =
+                relevance === "all" ? "All relevance" : `${relevance} only`;
+
+              return (
+                <button
+                  className={cn(
+                    "rounded-full border px-3 py-1.5 text-xs font-medium capitalize transition-colors",
+                    isActive
+                      ? relevance === "all"
+                        ? "border-foreground/20 bg-foreground text-background"
+                        : RELEVANCE_STYLES[relevance]
+                      : "border-border/60 bg-background/80 text-muted-foreground hover:text-foreground"
+                  )}
+                  key={relevance}
+                  onClick={() => setSelectedRelevance(relevance)}
+                  type="button"
+                >
+                  {pillLabel}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {filteredItemCount === 0 ? (
+        <div className="rounded-3xl border border-dashed border-border/60 bg-card/25 px-6 py-10 text-center shadow-[var(--shadow-card)]">
+          <div className="text-sm font-medium text-foreground">
+            No recommendations match the current filters.
+          </div>
+          <div className="mt-1 text-sm text-muted-foreground">
+            Try clearing the search or widening the relevance filter.
+          </div>
+        </div>
+      ) : null}
+
       <div className="space-y-4">
-        {artifact.tiers.map((tier) => {
+        {filteredTiers.map((tier) => {
           const styles = TIER_STYLES[tier.level] ?? TIER_STYLES[2];
 
           return (
@@ -234,128 +427,116 @@ function TieredRecommendationsView({
                   ) : null}
                 </div>
                 <div className="rounded-full border border-border/60 bg-background/70 px-3 py-1 text-[11px] text-muted-foreground">
-                  {tier.items.length}{" "}
-                  {tier.items.length === 1 ? "item" : "items"}
+                  {tier.items.length} {tier.items.length === 1 ? "item" : "items"}
                 </div>
               </div>
 
-              <div className="mt-4 grid gap-3 xl:grid-cols-2">
-                {tier.items.map((item) => (
-                  <article
-                    className="rounded-2xl border border-border/50 bg-background/80 p-4 backdrop-blur"
-                    key={item.id}
-                  >
-                    <div className="flex flex-wrap items-start justify-between gap-2">
-                      <div className="text-base font-semibold text-foreground">
-                        {item.name}
+              {tier.items.length === 0 ? (
+                <div className="mt-4 rounded-2xl border border-dashed border-border/50 bg-background/60 px-4 py-5 text-sm text-muted-foreground">
+                  No matching interventions in this level for the current filters.
+                </div>
+              ) : (
+                <div className="mt-4 grid gap-3 xl:grid-cols-2">
+                  {tier.items.map((item) => (
+                    <details
+                      className="rounded-2xl border border-border/50 bg-background/80 p-4 backdrop-blur open:shadow-[var(--shadow-card)]"
+                      key={item.id}
+                      open={selectedRelevance !== "all" || item.relevance === "highest"}
+                    >
+                      <summary className="flex cursor-pointer list-none flex-wrap items-start justify-between gap-2">
+                        <div>
+                          <div className="text-base font-semibold text-foreground">
+                            {item.name}
+                          </div>
+                          <div className="mt-1 text-sm leading-6 text-muted-foreground">
+                            {item.why}
+                          </div>
+                        </div>
+                        <span
+                          className={cn(
+                            "rounded-full border px-2.5 py-1 text-[11px] font-medium capitalize",
+                            RELEVANCE_STYLES[item.relevance]
+                          )}
+                        >
+                          {item.relevance} relevance
+                        </span>
+                      </summary>
+
+                      <div className="mt-4 space-y-3 border-t border-border/40 pt-4 text-sm leading-6">
+                        {item.rationale ? (
+                          <div>
+                            <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                              Mechanism / rationale
+                            </div>
+                            <div className="mt-1 text-foreground/90">
+                              {item.rationale}
+                            </div>
+                          </div>
+                        ) : null}
+
+                        {item.evidence ? (
+                          <div>
+                            <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                              Evidence
+                            </div>
+                            <div className="mt-1 text-foreground/90">
+                              {item.evidence}
+                            </div>
+                          </div>
+                        ) : null}
+
+                        {item.cautions?.length ? (
+                          <div>
+                            <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                              Cautions
+                            </div>
+                            <ul className="mt-1 space-y-1 text-foreground/90">
+                              {item.cautions.map((caution) => (
+                                <li key={caution}>• {caution}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        ) : null}
+
+                        {item.interactions?.length ? (
+                          <div>
+                            <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                              Interaction implications
+                            </div>
+                            <ul className="mt-1 space-y-1 text-foreground/90">
+                              {item.interactions.map((interaction) => (
+                                <li key={interaction}>• {interaction}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        ) : null}
+
+                        {item.nextStep ? (
+                          <div>
+                            <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                              Practical next step
+                            </div>
+                            <div className="mt-1 text-foreground/90">
+                              {item.nextStep}
+                            </div>
+                          </div>
+                        ) : null}
+
+                        {item.disclaimer ? (
+                          <div className="rounded-2xl border border-rose-500/20 bg-rose-500/8 px-3 py-2 text-rose-900 text-sm dark:text-rose-100">
+                            {item.disclaimer}
+                          </div>
+                        ) : null}
                       </div>
-                      <span
-                        className={cn(
-                          "rounded-full border px-2.5 py-1 text-[11px] font-medium capitalize",
-                          RELEVANCE_STYLES[item.relevance]
-                        )}
-                      >
-                        {item.relevance} relevance
-                      </span>
-                    </div>
-
-                    <div className="mt-3 space-y-3 text-sm leading-6">
-                      <div>
-                        <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                          Why it fits
-                        </div>
-                        <div className="mt-1 text-foreground/90">
-                          {item.why}
-                        </div>
-                      </div>
-
-                      {item.rationale ? (
-                        <div>
-                          <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                            Mechanism / rationale
-                          </div>
-                          <div className="mt-1 text-foreground/90">
-                            {item.rationale}
-                          </div>
-                        </div>
-                      ) : null}
-
-                      {item.evidence ? (
-                        <div>
-                          <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                            Evidence
-                          </div>
-                          <div className="mt-1 text-foreground/90">
-                            {item.evidence}
-                          </div>
-                        </div>
-                      ) : null}
-
-                      {item.cautions?.length ? (
-                        <div>
-                          <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                            Cautions
-                          </div>
-                          <ul className="mt-1 space-y-1 text-foreground/90">
-                            {item.cautions.map((caution) => (
-                              <li key={caution}>• {caution}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      ) : null}
-
-                      {item.interactions?.length ? (
-                        <div>
-                          <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                            Interaction implications
-                          </div>
-                          <ul className="mt-1 space-y-1 text-foreground/90">
-                            {item.interactions.map((interaction) => (
-                              <li key={interaction}>• {interaction}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      ) : null}
-
-                      {item.nextStep ? (
-                        <div>
-                          <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                            Practical next step
-                          </div>
-                          <div className="mt-1 text-foreground/90">
-                            {item.nextStep}
-                          </div>
-                        </div>
-                      ) : null}
-
-                      {item.disclaimer ? (
-                        <div className="rounded-2xl border border-rose-500/20 bg-rose-500/8 px-3 py-2 text-rose-900 text-sm dark:text-rose-100">
-                          {item.disclaimer}
-                        </div>
-                      ) : null}
-                    </div>
-                  </article>
-                ))}
-              </div>
+                    </details>
+                  ))}
+                </div>
+              )}
             </section>
           );
         })}
       </div>
 
-      {artifact.notes?.length ? (
-        <div className="space-y-2 rounded-2xl border border-border/50 bg-card/35 p-4">
-          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-            Notes
-          </div>
-          <ul className="space-y-2 text-sm text-muted-foreground">
-            {artifact.notes.map((note) => (
-              <li className="leading-6" key={note}>
-                • {note}
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
     </div>
   );
 }
@@ -373,21 +554,7 @@ export function OpenUIArtifactCanvas({
     return <TieredRecommendationsView artifact={artifact} />;
   }, [artifact]);
 
-  return (
-    <div className="h-full overflow-y-auto bg-background text-foreground">
-      <div className="border-b border-border/50 bg-background/95 px-4 py-4 backdrop-blur md:px-6">
-        <div className="text-lg font-semibold tracking-tight">
-          {artifact.title}
-        </div>
-        {artifact.subtitle ? (
-          <div className="mt-1 text-sm text-muted-foreground">
-            {artifact.subtitle}
-          </div>
-        ) : null}
-      </div>
-      {content}
-    </div>
-  );
+  return <div className="min-h-full bg-background text-foreground">{content}</div>;
 }
 
 export const openuiArtifact = new Artifact<"openui", Record<string, never>>({

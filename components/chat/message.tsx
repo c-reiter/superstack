@@ -1,6 +1,7 @@
 "use client";
 import type { UseChatHelpers } from "@ai-sdk/react";
 import type { Vote } from "@/lib/db/schema";
+import { useArtifact } from "@/hooks/use-artifact";
 import type { ChatMessage } from "@/lib/types";
 import { cn, sanitizeText } from "@/lib/utils";
 import { MessageContent, MessageResponse } from "../ai-elements/message";
@@ -63,6 +64,7 @@ const PurePreviewMessage = ({
   requiresScrollPadding: boolean;
   onEdit?: (message: ChatMessage) => void;
 }) => {
+  const { setArtifact } = useArtifact();
   const attachmentsFromMessage = message.parts.filter(
     (part) => part.type === "file"
   );
@@ -346,12 +348,37 @@ const PurePreviewMessage = ({
                       Error: {String(part.output.error)}
                     </div>
                   ) : (
-                    <div className="rounded-2xl border border-border/50 bg-card/50 p-3 text-sm text-muted-foreground">
+                    <button
+                      className="w-full rounded-2xl border border-border/50 bg-card/50 p-3 text-left text-sm text-muted-foreground transition-colors hover:bg-card/80"
+                      onClick={() => {
+                        const graph = part.input?.graph;
+
+                        if (!graph) {
+                          return;
+                        }
+
+                        setArtifact({
+                          documentId: part.output.id,
+                          title: part.output.title,
+                          kind: "graph",
+                          content: JSON.stringify(graph),
+                          isVisible: true,
+                          status: "idle",
+                          boundingBox: {
+                            top: 0,
+                            left: 0,
+                            width: 0,
+                            height: 0,
+                          },
+                        });
+                      }}
+                      type="button"
+                    >
                       Opened graph:{" "}
                       <span className="font-medium text-foreground">
                         {part.output.title}
                       </span>
-                    </div>
+                    </button>
                   )
                 }
               />
@@ -390,12 +417,102 @@ const PurePreviewMessage = ({
                       Error: {String(part.output.error)}
                     </div>
                   ) : (
-                    <div className="rounded-2xl border border-border/50 bg-card/50 p-3 text-sm text-muted-foreground">
+                    <button
+                      className="w-full rounded-2xl border border-border/50 bg-card/50 p-3 text-left text-sm text-muted-foreground transition-colors hover:bg-card/80"
+                      onClick={() => {
+                        const artifact = part.input?.artifact;
+
+                        if (!artifact) {
+                          return;
+                        }
+
+                        setArtifact({
+                          documentId: part.output.id,
+                          title: part.output.title,
+                          kind: "openui",
+                          content: JSON.stringify(artifact),
+                          isVisible: true,
+                          status: "idle",
+                          boundingBox: {
+                            top: 0,
+                            left: 0,
+                            width: 0,
+                            height: 0,
+                          },
+                        });
+                      }}
+                      type="button"
+                    >
                       Opened artifact:{" "}
                       <span className="font-medium text-foreground">
                         {part.output.title}
                       </span>
+                    </button>
+                  )
+                }
+              />
+            )}
+          </ToolContent>
+        </Tool>
+      );
+    }
+
+    if (type === "tool-createRecommendationArtifact") {
+      const { toolCallId, state } = part;
+
+      return (
+        <Tool
+          className={TOOL_WIDTH.compact}
+          defaultOpen={true}
+          key={toolCallId}
+        >
+          <ToolHeader
+            state={state}
+            toolName="createRecommendationArtifact"
+            type="dynamic-tool"
+          />
+          <ToolContent>
+            {state === "input-available" && <ToolInput input={part.input} />}
+            {state === "output-available" && (
+              <ToolOutput
+                errorText={undefined}
+                output={
+                  "error" in part.output ? (
+                    <div className="rounded border p-2 text-red-500">
+                      Error: {String(part.output.error)}
                     </div>
+                  ) : (
+                    <button
+                      className="w-full rounded-2xl border border-border/50 bg-card/50 p-3 text-left text-sm text-muted-foreground transition-colors hover:bg-card/80"
+                      onClick={() => {
+                        const artifact = part.input?.artifact;
+
+                        if (!artifact) {
+                          return;
+                        }
+
+                        setArtifact({
+                          documentId: part.output.id,
+                          title: part.output.title,
+                          kind: "recommendations",
+                          content: JSON.stringify(artifact),
+                          isVisible: true,
+                          status: "idle",
+                          boundingBox: {
+                            top: 0,
+                            left: 0,
+                            width: 0,
+                            height: 0,
+                          },
+                        });
+                      }}
+                      type="button"
+                    >
+                      Opened recommendation artifact:{" "}
+                      <span className="font-medium text-foreground">
+                        {part.output.title}
+                      </span>
+                    </button>
                   )
                 }
               />

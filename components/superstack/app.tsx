@@ -10,6 +10,10 @@ import {
   OpenUIArtifactCanvas,
   parseOpenUIArtifactContent,
 } from "@/artifacts/openui/client";
+import {
+  RecommendationArtifactCanvas,
+  parseRecommendationArtifactContent,
+} from "@/artifacts/recommendations/client";
 import { DataStreamHandler } from "@/components/chat/data-stream-handler";
 import { useDataStream } from "@/components/chat/data-stream-provider";
 import {
@@ -29,6 +33,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { initialArtifactData, useArtifact } from "@/hooks/use-artifact";
 import { DEFAULT_CHAT_MODEL } from "@/lib/ai/models";
+import {
+  isExamplePatientId,
+} from "@/lib/superstack/example-patient";
 import { buildInitialIntakeSystemInstruction } from "@/lib/superstack/intake";
 import { isPlaceholderPatientName } from "@/lib/superstack/naming";
 import type { PatientProfile, PatientRecord } from "@/lib/superstack/types";
@@ -124,7 +131,7 @@ function ConsultEmptyState({ patient }: { patient: PatientRecord }) {
       </div>
       <div className="mt-3 text-sm leading-6 text-muted-foreground">
         Ask about symptoms, redundancy in the stack, diagnostics to increase
-        confidence, or tiered interventions sorted by relevance.
+        confidence, or a Level 0-5 intervention board sorted by relevance.
       </div>
     </div>
   );
@@ -151,20 +158,31 @@ function ArtifactPanel() {
         : null,
     [artifact.content, artifact.kind]
   );
+  const recommendationArtifact = useMemo(
+    () =>
+      artifact.kind === "recommendations"
+        ? parseRecommendationArtifactContent(artifact.content)
+        : null,
+    [artifact.content, artifact.kind]
+  );
 
   if (!artifact.isVisible) {
     return null;
   }
 
   const isGraphArtifact = artifact.kind === "graph";
+  const isRecommendationArtifact = artifact.kind === "recommendations";
   const panelTitle = isGraphArtifact
     ? "Interaction graph"
-    : artifact.title || "OpenUI artifact";
+    : artifact.title ||
+      (isRecommendationArtifact ? "Recommendation artifact" : "OpenUI artifact");
   const panelSubtitle = isGraphArtifact
     ? "Current profile or recommendation view"
-    : openUIArtifact?.view === "table"
-      ? "Structured table artifact"
-      : "Structured recommendation artifact";
+    : isRecommendationArtifact
+      ? "Tiered diagnostic and intervention board"
+      : openUIArtifact?.view === "table"
+        ? "Structured table artifact"
+        : "Structured OpenUI artifact";
 
   return (
     <aside className="fixed inset-x-0 top-14 bottom-0 z-40 flex min-w-0 max-w-full flex-col overflow-hidden overflow-x-hidden border-t border-border/50 bg-sidebar shadow-2xl xl:static xl:h-dvh xl:w-[55%] xl:shrink-0 xl:border-t-0 xl:border-l xl:shadow-none">
@@ -200,13 +218,17 @@ function ArtifactPanel() {
       >
         {isGraphArtifact && graph ? (
           <GraphCanvas graph={graph} />
+        ) : isRecommendationArtifact && recommendationArtifact ? (
+          <RecommendationArtifactCanvas artifact={recommendationArtifact} />
         ) : artifact.kind === "openui" && openUIArtifact ? (
           <OpenUIArtifactCanvas artifact={openUIArtifact} />
         ) : (
           <div className="flex h-full items-center justify-center p-8 text-center text-sm text-muted-foreground">
             {isGraphArtifact
               ? "No graph yet. Ask to inspect the stack visually or open the current profile graph."
-              : "No structured artifact yet. Ask for a table or a Level 0-5 recommendation artifact."}
+              : isRecommendationArtifact
+                ? "No recommendation artifact yet. Ask for a Level 0-5 intervention board."
+                : "No structured artifact yet. Ask for a table or another structured artifact."}
           </div>
         )}
       </div>
@@ -217,26 +239,24 @@ function ArtifactPanel() {
 type PatientChatPaneProps = {
   patient: PatientRecord;
   mode: "intake" | "consult";
-  isGraphVisible: boolean;
-  hiddenArtifactLabel?: string | null;
+  isArtifactVisible: boolean;
+  isCurrentArtifactGraph: boolean;
   onRefreshPatient: () => Promise<unknown>;
   onRefreshList: () => Promise<unknown>;
   onRegenerateGraph: () => Promise<void>;
   onShowCurrentGraph: () => void;
-  onShowHiddenArtifact?: () => void;
   onCanFinishSetupChange: (canFinish: boolean) => void;
 };
 
 function PatientChatPane({
   patient,
   mode,
-  isGraphVisible,
-  hiddenArtifactLabel,
+  isArtifactVisible,
+  isCurrentArtifactGraph,
   onRefreshPatient,
   onRefreshList,
   onRegenerateGraph,
   onShowCurrentGraph,
-  onShowHiddenArtifact,
   onCanFinishSetupChange,
 }: PatientChatPaneProps) {
   const { setDataStream } = useDataStream();
@@ -384,22 +404,7 @@ function PatientChatPane({
         {mode === "consult" && (
           <div className="flex justify-end px-4 pt-3 md:px-5">
             <div className="flex items-center gap-2">
-              <div className="rounded-2xl border border-border/50 bg-card/40 px-3 py-2 text-xs text-muted-foreground">
-                {patient.setupComplete ? "Setup complete" : "Setup in progress"}
-              </div>
-
-              {!isGraphVisible && hiddenArtifactLabel ? (
-                <Button
-                  className="rounded-full"
-                  onClick={onShowHiddenArtifact}
-                  size="sm"
-                  type="button"
-                  variant="outline"
-                >
-                  <EyeIcon className="size-4" />
-                  {hiddenArtifactLabel}
-                </Button>
-              ) : isGraphVisible ? null : (
+              {!isCurrentArtifactGraph ? (
                 <Button
                   className="rounded-full"
                   disabled={!patient.currentGraph}
@@ -411,7 +416,7 @@ function PatientChatPane({
                   <EyeIcon className="size-4" />
                   Show current graph
                 </Button>
-              )}
+              ) : null}
             </div>
           </div>
         )}
@@ -425,7 +430,7 @@ function PatientChatPane({
               <ConsultEmptyState patient={patient} />
             )
           }
-          isArtifactVisible={isGraphVisible}
+          isArtifactVisible={isArtifactVisible}
           isLoading={false}
           isReadonly={false}
           messages={messages}
@@ -618,13 +623,6 @@ export function SuperstackApp() {
     });
   }
 
-  function handleShowHiddenArtifact() {
-    setArtifact((current) => ({
-      ...current,
-      isVisible: true,
-    }));
-  }
-
   async function handleFinishSetup() {
     if (!patient) {
       return;
@@ -676,15 +674,6 @@ export function SuperstackApp() {
       console.error("Failed to generate graph after finishing setup:", error);
     });
   }
-
-  const hiddenArtifactLabel =
-    !artifact.isVisible && artifact.documentId !== "init" && artifact.content
-      ? artifact.kind === "openui"
-        ? "Show recommendation artifact"
-        : artifact.kind === "graph"
-          ? "Show graph"
-          : "Show artifact"
-      : null;
 
   if (
     (isLoading && patients.length === 0) ||
@@ -775,7 +764,7 @@ export function SuperstackApp() {
                 >
                   Finish patient setup
                 </Button>
-              ) : (
+              ) : !isExamplePatientId(patient.id) ? (
                 <Button
                   className="rounded-lg"
                   onClick={() => setModeOverride("intake")}
@@ -785,14 +774,14 @@ export function SuperstackApp() {
                   <PencilLineIcon className="size-4" />
                   Edit Patient
                 </Button>
-              )}
+              ) : null}
             </div>
           </div>
 
           <div className="flex min-h-0 flex-1 overflow-hidden rounded-tl-[12px]">
             <PatientChatPane
-              hiddenArtifactLabel={hiddenArtifactLabel}
-              isGraphVisible={artifact.isVisible}
+              isArtifactVisible={artifact.isVisible}
+              isCurrentArtifactGraph={artifact.isVisible && artifact.kind === "graph"}
               key={`${patient.id}-${activeMode}`}
               mode={activeMode}
               onCanFinishSetupChange={setLiveCanFinishSetup}
@@ -800,7 +789,6 @@ export function SuperstackApp() {
               onRefreshPatient={mutatePatient}
               onRegenerateGraph={handleRegenerateGraph}
               onShowCurrentGraph={handleShowCurrentGraph}
-              onShowHiddenArtifact={handleShowHiddenArtifact}
               patient={patient}
             />
             <ArtifactPanel />

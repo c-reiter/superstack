@@ -8,7 +8,10 @@ import { saveDocument } from "../db/queries";
 import type { Document } from "../db/schema";
 import type { ChatMessage } from "../types";
 
-type PersistedArtifactKind = Exclude<ArtifactKind, "graph" | "openui">;
+type PersistedArtifactKind = Exclude<
+  ArtifactKind,
+  "graph" | "openui" | "recommendations"
+>;
 
 export type SaveDocumentProps = {
   id: string;

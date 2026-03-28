@@ -3,8 +3,8 @@ import { createClient } from "redis";
 import { isProductionEnvironment } from "@/lib/constants";
 import { ChatbotError } from "@/lib/errors";
 
-const MAX_MESSAGES = 10;
-const TTL_SECONDS = 60 * 60;
+const MAX_MESSAGES = 100;
+const TTL_SECONDS = 60 * 60 * 24;
 
 let client: ReturnType<typeof createClient> | null = null;
 

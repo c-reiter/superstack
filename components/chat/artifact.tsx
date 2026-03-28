@@ -17,6 +17,7 @@ import { codeArtifact } from "@/artifacts/code/client";
 import { graphArtifact } from "@/artifacts/graph/client";
 import { imageArtifact } from "@/artifacts/image/client";
 import { openuiArtifact } from "@/artifacts/openui/client";
+import { recommendationsArtifact } from "@/artifacts/recommendations/client";
 import { sheetArtifact } from "@/artifacts/sheet/client";
 import { textArtifact } from "@/artifacts/text/client";
 import { useArtifact } from "@/hooks/use-artifact";
@@ -38,6 +39,7 @@ export const artifactDefinitions = [
   sheetArtifact,
   graphArtifact,
   openuiArtifact,
+  recommendationsArtifact,
 ];
 export type ArtifactKind = (typeof artifactDefinitions)[number]["kind"];
 
@@ -96,6 +98,7 @@ function PureArtifact({
   const shouldFetchDocuments =
     artifact.kind !== "graph" &&
     artifact.kind !== "openui" &&
+    artifact.kind !== "recommendations" &&
     artifact.documentId !== "init" &&
     artifact.status !== "streaming";
 
@@ -277,7 +280,9 @@ function PureArtifact({
       : true;
 
   const supportsVersioning =
-    artifact.kind !== "graph" && artifact.kind !== "openui";
+    artifact.kind !== "graph" &&
+    artifact.kind !== "openui" &&
+    artifact.kind !== "recommendations";
 
   const { width: windowWidth, height: windowHeight } = useWindowSize();
   const isMobile = windowWidth ? windowWidth < 768 : false;

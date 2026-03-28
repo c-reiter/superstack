@@ -11,7 +11,7 @@ export const createGraph = ({
 }) =>
   tool({
     description:
-      "Open the right-side interaction graph. Include all relevant nodes in scope, but only create edges for real direct clinical relationships or interactions. Unrelated nodes should remain isolated with no edges.",
+      "Open the right-side interaction graph. Include all relevant nodes in scope, but only create edges for real direct clinical relationships or interactions. Unrelated nodes should remain isolated with no edges. Edge explanations should be plain-language, clinically specific, and can be moderately detailed—especially for polypharmacy, cumulative risk, mechanism, monitoring implications, or why the interaction matters in practice.",
     inputSchema: z.object({
       graph: patientGraphSchema,
     }),

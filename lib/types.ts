@@ -28,6 +28,7 @@ export type ChatTools = {
   createGraph: any;
   setPatientName: any;
   createOpenUIArtifact: any;
+  createRecommendationArtifact: any;
 };
 
 export type CustomUIDataTypes = {
@@ -37,6 +38,7 @@ export type CustomUIDataTypes = {
   codeDelta: string;
   graphDelta: string;
   openuiDelta: string;
+  recommendationDelta: string;
   suggestion: Suggestion;
   appendMessage: string;
   id: string;

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { auth } from "@/app/(auth)/auth";
+import { buildExamplePatientRecord } from "@/lib/superstack/example-patient";
 import { createPatient, listPatients } from "@/lib/superstack/store";
 
 const createPatientSchema = z.object({
@@ -14,7 +15,17 @@ export async function GET() {
   }
 
   const patients = await listPatients(session.user.id);
-  return Response.json({ patients }, { status: 200 });
+  const examplePatient = buildExamplePatientRecord();
+
+  return Response.json(
+    {
+      patients: [
+        examplePatient,
+        ...patients.filter((patient) => patient.id !== examplePatient.id),
+      ],
+    },
+    { status: 200 }
+  );
 }
 
 export async function POST(request: Request) {

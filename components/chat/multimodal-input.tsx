@@ -194,6 +194,35 @@ function PureMultimodalInput({
   const normalizedInput = input.trim();
   const hasSubmissionContent =
     normalizedInput.length > 0 || attachments.length > 0;
+  const lastMessage = messages.at(-1);
+  const hasStreamingAssistantParts = useMemo(() => {
+    const lastAssistantMessage = [...messages]
+      .reverse()
+      .find((message) => message.role === "assistant");
+
+    if (!lastAssistantMessage) {
+      return false;
+    }
+
+    return lastAssistantMessage.parts.some((part) => {
+      if (!("state" in part)) {
+        return false;
+      }
+
+      return (
+        part.state === "streaming" ||
+        part.state === "input-streaming" ||
+        part.state === "approval-requested"
+      );
+    });
+  }, [messages]);
+  const isWaitingForAssistantToStart =
+    status === "submitted" && lastMessage?.role === "user";
+  const hasStaleGenerationStatus =
+    (status === "submitted" || status === "streaming") &&
+    !isWaitingForAssistantToStart &&
+    !hasStreamingAssistantParts;
+  const composerStatus = hasStaleGenerationStatus ? "ready" : status;
   const filteredSlashCommands = useMemo(
     () =>
       slashCommands.filter((command) =>
@@ -484,7 +513,13 @@ function PureMultimodalInput({
               return;
             }
 
-            if (status === "ready" || status === "error") {
+            if (hasStaleGenerationStatus) {
+              void stop();
+              submitForm();
+              return;
+            }
+
+            if (composerStatus === "ready" || composerStatus === "error") {
               submitForm();
             } else {
               toast.error("Please wait for the model to finish its response!");
@@ -579,11 +614,11 @@ function PureMultimodalInput({
               <AttachmentsButton
                 fileInputRef={fileInputRef}
                 selectedModelId={selectedModelId}
-                status={status}
+                status={composerStatus}
               />
             </PromptInputTools>
 
-            {status === "submitted" ? (
+            {composerStatus === "submitted" || composerStatus === "streaming" ? (
               <StopButton setMessages={setMessages} stop={stop} />
             ) : (
               <PromptInputSubmit
@@ -595,7 +630,7 @@ function PureMultimodalInput({
                 )}
                 data-testid="send-button"
                 disabled={!hasSubmissionContent || uploadQueue.length > 0}
-                status={status}
+                status={composerStatus}
                 variant="secondary"
               >
                 <ArrowUpIcon className="size-4" />

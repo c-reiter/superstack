@@ -1,71 +1,134 @@
-<a href="https://chat.vercel.ai/">
-  <img alt="Chatbot" src="app/(chat)/opengraph-image.png">
-  <h1 align="center">Chatbot</h1>
-</a>
+# SuperStack
 
-<p align="center">
-    Chatbot (formerly AI Chatbot) is a free, open-source template built with Next.js and the AI SDK that helps you quickly build powerful chatbot applications.
-</p>
+Hosted version: [**superstack.sh**](https://superstack.sh)
 
-<p align="center">
-  <a href="https://chatbot.dev"><strong>Read Docs</strong></a> ·
-  <a href="#features"><strong>Features</strong></a> ·
-  <a href="#model-providers"><strong>Model Providers</strong></a> ·
-  <a href="#deploy-your-own"><strong>Deploy Your Own</strong></a> ·
-  <a href="#running-locally"><strong>Running locally</strong></a>
-</p>
-<br/>
+SuperStack is an AI clinician copilot for complex medication and supplement stacks.
 
-## Features
+It lets clinicians:
 
-- [Next.js](https://nextjs.org) App Router
-  - Advanced routing for seamless navigation and performance
-  - React Server Components (RSCs) and Server Actions for server-side rendering and increased performance
-- [AI SDK](https://ai-sdk.dev/docs/introduction)
-  - Unified API for generating text, structured objects, and tool calls with LLMs
-  - Hooks for building dynamic chat and generative user interfaces
-  - Supports OpenAI, Anthropic, Google, xAI, and other model providers via AI Gateway
-- [shadcn/ui](https://ui.shadcn.com)
-  - Styling with [Tailwind CSS](https://tailwindcss.com)
-  - Component primitives from [Radix UI](https://radix-ui.com) for accessibility and flexibility
-- Data Persistence
-  - [Neon Serverless Postgres](https://vercel.com/marketplace/neon) for saving chat history and user data
-  - [Vercel Blob](https://vercel.com/storage/blob) for efficient file storage
-- [Auth.js](https://authjs.dev)
-  - Simple and secure authentication
+- create and update patients conversationally
+- switch between multiple patient profiles
+- ask consult questions in chat
+- get tiered recommendations ranked by relevance
+- inspect current and proposed interactions in a graph view
 
-## Model Providers
+## Tech stack
 
-This template uses the [Vercel AI Gateway](https://vercel.com/docs/ai-gateway) to access multiple AI models through a unified interface. Models are configured in `lib/ai/models.ts` with per-model provider routing. Included models: Mistral, Moonshot, DeepSeek, OpenAI, and xAI.
+- Next.js 16
+- TypeScript
+- Tailwind CSS
+- Vercel AI SDK + AI Gateway
+- NextAuth
+- Postgres + Drizzle ORM
+- React Flow
+- Vercel Blob
+- Redis
 
-### AI Gateway Authentication
+## Prerequisites
 
-**For Vercel deployments**: Authentication is handled automatically via OIDC tokens.
+- Node.js 20+
+- `pnpm`
+- A Postgres database
+- A Vercel AI Gateway API key for local/non-Vercel usage
+- Optional but recommended: Vercel Blob and Redis
 
-**For non-Vercel deployments**: You need to provide an AI Gateway API key by setting the `AI_GATEWAY_API_KEY` environment variable in your `.env.local` file.
+## Local setup
 
-With the [AI SDK](https://ai-sdk.dev/docs/introduction), you can also switch to direct LLM providers like [OpenAI](https://openai.com), [Anthropic](https://anthropic.com), [Cohere](https://cohere.com/), and [many more](https://ai-sdk.dev/providers/ai-sdk-providers) with just a few lines of code.
+1. Install dependencies:
 
-## Deploy Your Own
+   ```bash
+   pnpm install
+   ```
 
-You can deploy your own version of Chatbot to Vercel with one click:
+2. Copy the example env file:
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/templates/next.js/chatbot)
+   ```bash
+   cp .env.example .env.local
+   ```
 
-## Running locally
+3. Fill in the required environment variables in `.env.local`.
 
-You will need to use the environment variables [defined in `.env.example`](.env.example) to run Chatbot. It's recommended you use [Vercel Environment Variables](https://vercel.com/docs/projects/environment-variables) for this, but a `.env` file is all that is necessary.
+4. Run database migrations:
 
-> Note: You should not commit your `.env` file or it will expose secrets that will allow others to control access to your various AI and authentication provider accounts.
+   ```bash
+   pnpm db:migrate
+   ```
 
-1. Install Vercel CLI: `npm i -g vercel`
-2. Link local instance with Vercel and GitHub accounts (creates `.vercel` directory): `vercel link`
-3. Download your environment variables: `vercel env pull`
+5. Start the development server:
 
-```bash
-pnpm install
-pnpm db:migrate # Setup database or apply latest database changes
-pnpm dev
+   ```bash
+   pnpm dev
+   ```
+
+6. Open the app at:
+
+   ```text
+   http://localhost:3000
+   ```
+
+## Environment variables
+
+Create a `.env.local` file in the project root.
+
+### Required
+
+| Variable | Required | What it is for |
+| --- | --- | --- |
+| `AUTH_SECRET` | Yes | Secret used by NextAuth / JWT session handling. Generate one with `openssl rand -base64 32`. |
+| `POSTGRES_URL` | Yes | Postgres connection string used by the app and Drizzle migrations. |
+| `AI_GATEWAY_API_KEY` | Yes for local/non-Vercel | API key for Vercel AI Gateway. On Vercel, authentication is handled automatically via OIDC. |
+
+### Optional / feature-dependent
+
+| Variable | Required | What it is for |
+| --- | --- | --- |
+| `BLOB_READ_WRITE_TOKEN` | Recommended | Enables file uploads via Vercel Blob. Without it, uploads fall back to inline data URLs where possible. |
+| `REDIS_URL` | Optional | Enables resumable chat stream support and related runtime features. |
+| `NEXT_PUBLIC_APP_URL` | Optional | Public base URL used for metadata. Defaults to `http://localhost:3000` in local development. |
+| `IS_DEMO` | Optional | If set to `1`, serves the app under `/demo` with demo-specific base path behavior. |
+
+### Example `.env.local`
+
+```env
+AUTH_SECRET=replace_me
+AI_GATEWAY_API_KEY=replace_me
+POSTGRES_URL=replace_me
+BLOB_READ_WRITE_TOKEN=replace_me
+REDIS_URL=replace_me
+NEXT_PUBLIC_APP_URL=http://localhost:3000
 ```
 
-Your app template should now be running on [localhost:3000](http://localhost:3000).
+## Database
+
+Apply migrations locally with:
+
+```bash
+pnpm db:migrate
+```
+
+Useful database commands:
+
+```bash
+pnpm db:generate
+pnpm db:migrate
+pnpm db:studio
+pnpm db:push
+```
+
+## Scripts
+
+```bash
+pnpm dev        # start local dev server
+pnpm build      # run migrations, then build
+pnpm start      # start production server
+pnpm test       # run Playwright tests
+pnpm check      # lint/check
+pnpm fix        # auto-fix lint/style issues
+```
+
+## Notes
+
+- Drizzle loads environment variables from `.env.local`.
+- If `POSTGRES_URL` is missing, migrations are skipped.
+- If `REDIS_URL` is missing, the app still runs, but resumable streaming features are disabled.
+- For the best local experience, use the full set of env vars from `.env.example`.

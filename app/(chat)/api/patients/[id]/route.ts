@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { auth } from "@/app/(auth)/auth";
 import { getPatientById } from "@/lib/db/queries";
+import {
+  buildExamplePatientRecord,
+  isExamplePatientId,
+} from "@/lib/superstack/example-patient";
 import { normalizePatientDisplayName } from "@/lib/superstack/naming";
 import { getHydratedPatient, savePatientRecord } from "@/lib/superstack/store";
 import {
@@ -67,6 +71,11 @@ export async function GET(
   }
 
   const { id } = await params;
+
+  if (isExamplePatientId(id)) {
+    return Response.json({ patient: buildExamplePatientRecord() }, { status: 200 });
+  }
+
   const rawPatient = await getPatientById({ id });
 
   if (!rawPatient || rawPatient.userId !== session.user.id) {
@@ -90,6 +99,14 @@ export async function PATCH(
 
   const body = patientPatchSchema.parse(await request.json());
   const { id } = await params;
+
+  if (isExamplePatientId(id)) {
+    return Response.json(
+      { error: "read_only_example_patient" },
+      { status: 403 }
+    );
+  }
+
   const hydratedPatient = await getHydratedPatient(id);
 
   if (!hydratedPatient) {

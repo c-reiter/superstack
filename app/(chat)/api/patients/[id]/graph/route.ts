@@ -3,6 +3,10 @@ import { auth } from "@/app/(auth)/auth";
 import { allowedModelIds, DEFAULT_CHAT_MODEL } from "@/lib/ai/models";
 import { generateCurrentPatientGraph } from "@/lib/ai/superstack-graph";
 import { getPatientById } from "@/lib/db/queries";
+import {
+  buildExamplePatientRecord,
+  isExamplePatientId,
+} from "@/lib/superstack/example-patient";
 import { getHydratedPatient, savePatientRecord } from "@/lib/superstack/store";
 
 const requestSchema = z
@@ -22,6 +26,14 @@ export async function POST(
   }
 
   const { id } = await params;
+
+  if (isExamplePatientId(id)) {
+    return Response.json(
+      { patient: buildExamplePatientRecord() },
+      { status: 200 }
+    );
+  }
+
   const rawPatient = await getPatientById({ id });
 
   if (!rawPatient || rawPatient.userId !== session.user.id) {

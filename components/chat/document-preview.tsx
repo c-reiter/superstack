@@ -27,7 +27,10 @@ import { ImageEditor } from "./image-editor";
 import { SpreadsheetEditor } from "./sheet-editor";
 import { Editor } from "./text-editor";
 
-type PreviewArtifactKind = Exclude<ArtifactKind, "graph" | "openui">;
+type PreviewArtifactKind = Exclude<
+  ArtifactKind,
+  "graph" | "openui" | "recommendations"
+>;
 
 const DOCUMENT_PREVIEW_HEIGHT = "h-[257px]";
 
@@ -47,7 +50,11 @@ type DocumentPreviewProps = {
 const getPreviewArtifactKind = (
   artifactKind: ArtifactKind
 ): PreviewArtifactKind =>
-  artifactKind === "graph" || artifactKind === "openui" ? "text" : artifactKind;
+  artifactKind === "graph" ||
+  artifactKind === "openui" ||
+  artifactKind === "recommendations"
+    ? "text"
+    : artifactKind;
 
 const createStreamingPreviewDocument = (
   artifact: UIArtifact
@@ -55,7 +62,8 @@ const createStreamingPreviewDocument = (
   if (
     artifact.status !== "streaming" ||
     artifact.kind === "graph" ||
-    artifact.kind === "openui"
+    artifact.kind === "openui" ||
+    artifact.kind === "recommendations"
   ) {
     return null;
   }
