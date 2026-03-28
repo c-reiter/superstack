@@ -16,7 +16,6 @@ import {
 } from "@/lib/ai/superstack-prompts";
 import { setPatientName } from "@/lib/ai/tools/set-patient-name";
 import { getPatientById } from "@/lib/db/queries";
-import { isExamplePatientId } from "@/lib/superstack/example-patient";
 import { normalizePatientDisplayName } from "@/lib/superstack/naming";
 import { extractPatientProfileFromMessages } from "@/lib/superstack/profile-extraction";
 import { savePatientRecord } from "@/lib/superstack/store";
@@ -71,11 +70,6 @@ export async function POST(
   }
 
   const { id } = await params;
-
-  if (isExamplePatientId(id)) {
-    return Response.json({ error: "read_only_example_patient" }, { status: 403 });
-  }
-
   const body = requestSchema.parse(await request.json());
   const patient = await getPatientById({ id });
 

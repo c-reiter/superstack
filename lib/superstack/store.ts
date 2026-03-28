@@ -13,6 +13,7 @@ import {
 import type { DBMessage, Patient as DbPatient } from "@/lib/db/schema";
 import type { ChatMessage } from "@/lib/types";
 import { convertToUIMessages, generateUUID } from "@/lib/utils";
+import { buildExamplePatientRecord } from "./example-patient";
 import { getNextPlaceholderPatientName } from "./naming";
 import {
   emptyPatientProfile,
@@ -197,7 +198,71 @@ export function hydratePatient(patient: DbPatient): PatientRecord {
   };
 }
 
+async function ensureExamplePatientForUser(userId: string) {
+  const examplePatient = buildExamplePatientRecord();
+  const existingPatients = await getPatientsByUserId({ userId });
+  const hasExamplePatient = existingPatients.some(
+    (patient) =>
+      patient.name === examplePatient.name &&
+      patient.summary === examplePatient.summary
+  );
+
+  if (hasExamplePatient) {
+    return;
+  }
+
+  const intakeChatId = generateUUID();
+  const consultChatId = generateUUID();
+
+  await Promise.all([
+    saveChat({
+      id: intakeChatId,
+      userId,
+      title: buildPatientChatTitle(examplePatient.name, "intake"),
+      visibility: "private",
+    }),
+    saveChat({
+      id: consultChatId,
+      userId,
+      title: buildPatientChatTitle(examplePatient.name, "consult"),
+      visibility: "private",
+    }),
+  ]);
+
+  await createPatientRow({
+    userId,
+    name: examplePatient.name,
+    summary: examplePatient.summary,
+    setupComplete: examplePatient.setupComplete,
+    profile: JSON.stringify(examplePatient.profile),
+    currentGraph: JSON.stringify(examplePatient.currentGraph),
+    intakeChatId,
+    consultChatId,
+    intakeMessages: JSON.stringify([]),
+    consultMessages: JSON.stringify([]),
+  });
+
+  await Promise.all([
+    replaceMessagesByChatId({
+      chatId: intakeChatId,
+      messages: toDbMessages({
+        chatId: intakeChatId,
+        messages: examplePatient.intakeMessages,
+      }),
+    }),
+    replaceMessagesByChatId({
+      chatId: consultChatId,
+      messages: toDbMessages({
+        chatId: consultChatId,
+        messages: examplePatient.consultMessages,
+      }),
+    }),
+  ]);
+}
+
 export async function listPatients(userId: string) {
+  await ensureExamplePatientForUser(userId);
+
   const patients = await getPatientsByUserId({ userId });
   return Promise.all(
     patients.map(async (patient) =>

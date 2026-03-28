@@ -16,10 +16,6 @@ import { createGraph } from "@/lib/ai/tools/create-graph";
 import { createOpenUIArtifact } from "@/lib/ai/tools/create-openui-artifact";
 import { createRecommendationArtifact } from "@/lib/ai/tools/create-recommendation-artifact";
 import { getPatientById } from "@/lib/db/queries";
-import {
-  examplePatientProfile,
-  isExamplePatientId,
-} from "@/lib/superstack/example-patient";
 import { savePatientRecord } from "@/lib/superstack/store";
 import { emptyPatientProfile } from "@/lib/superstack/types";
 import type { ChatMessage } from "@/lib/types";
@@ -71,18 +67,15 @@ export async function POST(
 
   const { id } = await params;
   const body = requestSchema.parse(await request.json());
-  const isExamplePatient = isExamplePatientId(id);
-  const patient = isExamplePatient ? null : await getPatientById({ id });
+  const patient = await getPatientById({ id });
 
-  if (!isExamplePatient && (!patient || patient.userId !== session.user.id)) {
+  if (!patient || patient.userId !== session.user.id) {
     return Response.json({ error: "not_found" }, { status: 404 });
   }
 
-  const profile = isExamplePatient
-    ? examplePatientProfile
-    : patient?.profile
-      ? JSON.parse(patient.profile)
-      : emptyPatientProfile();
+  const profile = patient.profile
+    ? JSON.parse(patient.profile)
+    : emptyPatientProfile();
   const modelId =
     body.selectedModelId && allowedModelIds.has(body.selectedModelId)
       ? body.selectedModelId
@@ -157,10 +150,6 @@ Response requirements after the artifact:
       writer.merge(result.toUIMessageStream());
     },
     onFinish: async ({ messages: assistantMessages }) => {
-      if (isExamplePatient) {
-        return;
-      }
-
       const fullMessages = [
         ...uiMessages,
         ...(assistantMessages as ChatMessage[]),

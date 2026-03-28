@@ -33,9 +33,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { initialArtifactData, useArtifact } from "@/hooks/use-artifact";
 import { DEFAULT_CHAT_MODEL } from "@/lib/ai/models";
-import {
-  isExamplePatientId,
-} from "@/lib/superstack/example-patient";
+import { isExamplePatientRecord } from "@/lib/superstack/example-patient";
 import { buildInitialIntakeSystemInstruction } from "@/lib/superstack/intake";
 import { isPlaceholderPatientName } from "@/lib/superstack/naming";
 import type { PatientProfile, PatientRecord } from "@/lib/superstack/types";
@@ -504,9 +502,12 @@ export function SuperstackApp() {
     const hasSelectedPatient = patients.some(
       (currentPatient) => currentPatient.id === selectedPatientId
     );
+    const preferredPatient = patients.find(
+      (currentPatient) => !isExamplePatientRecord(currentPatient)
+    );
 
-    if (!selectedPatientId || !hasSelectedPatient) {
-      setSelectedPatientId(patients[0].id);
+    if ((!selectedPatientId || !hasSelectedPatient) && preferredPatient) {
+      setSelectedPatientId(preferredPatient.id);
     }
   }, [patients, selectedPatientId]);
 
@@ -555,7 +556,15 @@ export function SuperstackApp() {
   }, [creatingPatient, mutatePatients, setArtifact]);
 
   useEffect(() => {
-    if (isLoading || creatingPatient || patients.length > 0) {
+    if (isLoading || creatingPatient) {
+      return;
+    }
+
+    const nonExamplePatients = patients.filter(
+      (currentPatient) => !isExamplePatientRecord(currentPatient)
+    );
+
+    if (nonExamplePatients.length > 0) {
       return;
     }
 
@@ -567,7 +576,7 @@ export function SuperstackApp() {
     handleCreatePatient().catch((error) => {
       console.error("Failed to create initial patient:", error);
     });
-  }, [creatingPatient, handleCreatePatient, isLoading, patients.length]);
+  }, [creatingPatient, handleCreatePatient, isLoading, patients]);
 
   useEffect(() => {
     if (!selectedPatientId) {
@@ -764,7 +773,7 @@ export function SuperstackApp() {
                 >
                   Finish patient setup
                 </Button>
-              ) : !isExamplePatientId(patient.id) ? (
+              ) : (
                 <Button
                   className="rounded-lg"
                   onClick={() => setModeOverride("intake")}
@@ -774,7 +783,7 @@ export function SuperstackApp() {
                   <PencilLineIcon className="size-4" />
                   Edit Patient
                 </Button>
-              ) : null}
+              )}
             </div>
           </div>
 

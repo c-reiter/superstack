@@ -309,330 +309,784 @@ export const examplePatientSummary =
   "64M with HTN, T2DM, AF, CKD3a, OSA, BPH, edema, fatigue, orthostasis, nocturia, and substantial polypharmacy including anticoagulation plus supplements.";
 
 export const examplePatientCurrentGraph: PatientGraph = {
-  mode: "current",
-  title: "Current profile graph",
-  subtitle: "Direct relationships inferred from the structured patient profile.",
-  nodes: [
+  "mode": "current",
+  "title": "Current profile graph",
+  "subtitle": "Direct relationships inferred from the structured patient profile.",
+  "nodes": [
     {
-      id: "condition-af",
-      label: "Atrial fibrillation",
-      type: "condition",
-      subtitle: "Paroxysmal; prior RVR hospitalization",
+      "id": "condition-hypertension",
+      "label": "Hypertension",
+      "type": "condition"
     },
     {
-      id: "condition-ckd3a",
-      label: "CKD stage 3a",
-      type: "condition",
-      subtitle: "eGFR 56 mL/min/1.73m² • UACR elevated",
+      "id": "condition-type-2-diabetes-mellitus",
+      "label": "Type 2 diabetes mellitus",
+      "type": "condition"
     },
     {
-      id: "condition-osa",
-      label: "Obstructive sleep apnea",
-      type: "condition",
-      subtitle: "Known diagnosis • inconsistent CPAP use",
+      "id": "condition-paroxysmal-atrial-fibrillation",
+      "label": "Paroxysmal atrial fibrillation",
+      "type": "condition"
     },
     {
-      id: "condition-hfpef",
-      label: "HFpEF / edema history",
-      type: "condition",
-      subtitle: "Preserved EF • chronic lower-extremity edema",
+      "id": "condition-heart-failure-with-preserved-ejection-fraction-chronic-lower-extremity-edema-history",
+      "label": "Heart failure with preserved ejection fraction",
+      "type": "condition",
+      "subtitle": "Heart failure with preserved ejection fraction / chronic lower-extremity edema history"
     },
     {
-      id: "lab-b12",
-      label: "Borderline B12",
-      type: "lab",
-      subtitle: "298 pg/mL",
+      "id": "condition-chronic-kidney-disease-stage-3a",
+      "label": "Chronic kidney disease stage 3a",
+      "type": "condition"
     },
     {
-      id: "symptom-fatigue",
-      label: "Fatigue",
-      type: "symptom",
+      "id": "condition-benign-prostatic-hyperplasia",
+      "label": "Benign prostatic hyperplasia",
+      "type": "condition"
     },
     {
-      id: "symptom-orthostasis",
-      label: "Orthostatic lightheadedness",
-      type: "symptom",
+      "id": "medication-apixaban-5-mg-twice-daily",
+      "label": "Apixaban",
+      "type": "medication",
+      "subtitle": "5 mg • twice daily"
     },
     {
-      id: "symptom-edema",
-      label: "Ankle edema",
-      type: "symptom",
+      "id": "medication-metoprolol-succinate-100-mg-nightly",
+      "label": "Metoprolol succinate",
+      "type": "medication",
+      "subtitle": "100 mg • nightly"
     },
     {
-      id: "symptom-nocturia",
-      label: "Nocturia",
-      type: "symptom",
+      "id": "medication-lisinopril-20-mg-every-morning",
+      "label": "Lisinopril",
+      "type": "medication",
+      "subtitle": "20 mg • every morning"
     },
     {
-      id: "goal-simplify",
-      label: "Reduce polypharmacy burden",
-      type: "goal",
+      "id": "medication-amlodipine-10-mg-every-morning",
+      "label": "Amlodipine",
+      "type": "medication",
+      "subtitle": "10 mg • every morning"
     },
     {
-      id: "diagnostic-orthostatics",
-      label: "Orthostatic vitals",
-      type: "diagnostic",
-      subtitle: "Not yet formally documented",
+      "id": "medication-hydrochlorothiazide-25-mg-every-morning",
+      "label": "Hydrochlorothiazide",
+      "type": "medication",
+      "subtitle": "25 mg • every morning"
     },
     {
-      id: "diagnostic-cpap",
-      label: "CPAP adherence review",
-      type: "diagnostic",
-      subtitle: "Download / nightly use assessment",
+      "id": "medication-metformin-xr-1000-mg-twice-daily-with-meals",
+      "label": "Metformin XR",
+      "type": "medication",
+      "subtitle": "1000 mg • twice daily with meals"
     },
     {
-      id: "med-apixaban",
-      label: "Apixaban",
-      type: "medication",
-      subtitle: "5 mg BID",
+      "id": "medication-empagliflozin-25-mg-every-morning",
+      "label": "Empagliflozin",
+      "type": "medication",
+      "subtitle": "25 mg • every morning"
     },
     {
-      id: "med-metoprolol",
-      label: "Metoprolol succinate",
-      type: "medication",
-      subtitle: "100 mg nightly",
+      "id": "medication-atorvastatin-40-mg-nightly",
+      "label": "Atorvastatin",
+      "type": "medication",
+      "subtitle": "40 mg • nightly"
     },
     {
-      id: "med-lisinopril",
-      label: "Lisinopril",
-      type: "medication",
-      subtitle: "20 mg qAM",
+      "id": "supplement-fish-oil-2-g-daily",
+      "label": "Fish oil",
+      "type": "supplement",
+      "subtitle": "2 g • daily"
     },
     {
-      id: "med-amlodipine",
-      label: "Amlodipine",
-      type: "medication",
-      subtitle: "10 mg qAM",
+      "id": "supplement-turmeric-curcumin-1000-mg-daily",
+      "label": "Turmeric",
+      "type": "supplement",
+      "subtitle": "Turmeric / curcumin • 1000 mg • daily"
     },
     {
-      id: "med-hctz",
-      label: "Hydrochlorothiazide",
-      type: "medication",
-      subtitle: "25 mg qAM",
+      "id": "supplement-magnesium-glycinate-300-mg-nightly",
+      "label": "Magnesium glycinate",
+      "type": "supplement",
+      "subtitle": "300 mg • nightly"
     },
     {
-      id: "med-empagliflozin",
-      label: "Empagliflozin",
-      type: "medication",
-      subtitle: "25 mg daily",
+      "id": "supplement-vitamin-d3-2000-iu-daily",
+      "label": "Vitamin D3",
+      "type": "supplement",
+      "subtitle": "2000 IU • daily"
     },
     {
-      id: "med-metformin",
-      label: "Metformin XR",
-      type: "medication",
-      subtitle: "1000 mg BID",
+      "id": "supplement-coq10-200-mg-daily",
+      "label": "CoQ10",
+      "type": "supplement",
+      "subtitle": "200 mg • daily"
     },
     {
-      id: "med-tamsulosin",
-      label: "Tamsulosin",
-      type: "medication",
-      subtitle: "0.4 mg nightly",
+      "id": "symptom-fatigue-low-stamina",
+      "label": "Fatigue",
+      "type": "symptom",
+      "subtitle": "Fatigue / low stamina"
     },
     {
-      id: "med-trazodone",
-      label: "Trazodone",
-      type: "medication",
-      subtitle: "50 mg PRN bedtime",
+      "id": "symptom-lightheadedness-when-standing",
+      "label": "Lightheadedness when standing",
+      "type": "symptom"
     },
     {
-      id: "supp-fishoil",
-      label: "Fish oil",
-      type: "supplement",
-      subtitle: "2 g daily",
+      "id": "symptom-bilateral-ankle-edema-worse-in-the-evening",
+      "label": "Bilateral ankle edema worse evening",
+      "type": "symptom",
+      "subtitle": "Bilateral ankle edema worse in the evening"
     },
     {
-      id: "supp-turmeric",
-      label: "Turmeric / curcumin",
-      type: "supplement",
-      subtitle: "1000 mg daily",
+      "id": "symptom-nocturia-3-4-times-nightly",
+      "label": "Nocturia 3-4 times nightly",
+      "type": "symptom"
     },
+    {
+      "id": "symptom-poor-sleep-quality-despite-trazodone",
+      "label": "Poor sleep quality despite trazodone",
+      "type": "symptom"
+    },
+    {
+      "id": "symptom-exertional-dyspnea-climbing-stairs",
+      "label": "Exertional dyspnea climbing stairs",
+      "type": "symptom"
+    },
+    {
+      "id": "symptom-easy-bruising",
+      "label": "Easy bruising",
+      "type": "symptom"
+    },
+    {
+      "id": "symptom-mild-cognitive-fog-by-late-afternoon",
+      "label": "Mild cognitive fog by late afternoon",
+      "type": "symptom"
+    },
+    {
+      "id": "symptom-constipation",
+      "label": "Constipation",
+      "type": "symptom"
+    },
+    {
+      "id": "goal-reduce-polypharmacy-burden-where-reasonable",
+      "label": "Reduce polypharmacy burden where reasonable",
+      "type": "goal"
+    },
+    {
+      "id": "goal-clarify-medication-contributors-to-fatigue-edema-and-orthostasis",
+      "label": "Clarify medication contributors to fatigue",
+      "type": "goal",
+      "subtitle": "Clarify medication contributors to fatigue, edema, and orthostasis"
+    },
+    {
+      "id": "goal-improve-sleep-and-daytime-function",
+      "label": "Improve sleep and daytime function",
+      "type": "goal"
+    },
+    {
+      "id": "goal-maintain-stroke-prevention-and-cardiometabolic-risk-reduction",
+      "label": "Maintain stroke prevention cardiometabolic risk reduction",
+      "type": "goal",
+      "subtitle": "Maintain stroke prevention and cardiometabolic risk reduction"
+    },
+    {
+      "id": "lab-b12-298-pg-ml-borderline",
+      "label": "B12",
+      "type": "lab",
+      "subtitle": "298 pg/mL — borderline"
+    },
+    {
+      "id": "lab-triglycerides-210-mg-dl-elevated",
+      "label": "Triglycerides",
+      "type": "lab",
+      "subtitle": "210 mg/dL — elevated"
+    },
+    {
+      "id": "lab-nt-probnp-412-pg-ml-mildly-elevated",
+      "label": "NT-proBNP",
+      "type": "lab",
+      "subtitle": "412 pg/mL — mildly elevated"
+    },
+    {
+      "id": "lab-potassium-3-5-mmol-l-low-normal",
+      "label": "Potassium",
+      "type": "lab",
+      "subtitle": "3.5 mmol/L — low-normal"
+    },
+    {
+      "id": "lab-urine-albumin-creatinine-ratio-68-mg-g-elevated",
+      "label": "Urine albumin",
+      "type": "lab",
+      "subtitle": "Urine albumin/creatinine ratio • 68 mg/g — elevated"
+    },
+    {
+      "id": "diagnostic-echocardiogram-last-year-preserved-ef-with-mild-left-atrial-enlargement",
+      "label": "Echocardiogram last year",
+      "type": "diagnostic",
+      "subtitle": "Echocardiogram last year: preserved EF with mild left atrial enlargement"
+    },
+    {
+      "id": "diagnostic-sleep-study-3-years-ago-confirming-osa",
+      "label": "Sleep study 3 years ago confirming",
+      "type": "diagnostic",
+      "subtitle": "Sleep study 3 years ago confirming OSA"
+    },
+    {
+      "id": "diagnostic-medication-reconciliation-with-home-bottles-still-pending",
+      "label": "Medication reconciliation home bottles still pending",
+      "type": "diagnostic",
+      "subtitle": "Medication reconciliation with home bottles still pending"
+    },
+    {
+      "id": "diagnostic-orthostatic-vitals-not-yet-formally-documented",
+      "label": "Orthostatic vitals not yet formally documented",
+      "type": "diagnostic"
+    }
   ],
-  edges: [
+  "edges": [
     {
-      id: "edge-apixaban-af",
-      source: "med-apixaban",
-      target: "condition-af",
-      label: "stroke prevention",
-      explanation:
-        "Apixaban is a core protective therapy here because the atrial fibrillation itself carries embolic stroke risk. This is one of the agents that should generally be protected during simplification unless bleeding risk, procedures, or a change in AF strategy clearly alter the balance.",
-      severity: "info",
+      "id": "condition-paroxysmal-atrial-fibrillation__medication-apixaban-5-mg-twice-daily__stroke-prevention",
+      "source": "medication-apixaban-5-mg-twice-daily",
+      "target": "condition-paroxysmal-atrial-fibrillation",
+      "label": "stroke prevention",
+      "explanation": "Anticoagulation is being used to reduce thromboembolic stroke risk from atrial fibrillation.",
+      "severity": "high"
     },
     {
-      id: "edge-apixaban-fishoil",
-      source: "med-apixaban",
-      target: "supp-fishoil",
-      label: "additive bleeding risk",
-      explanation:
-        "Fish oil is not a formal anticoagulant, but in a patient already on apixaban it can still add to the overall bruising and bleeding picture. The point is less a dramatic interaction and more a cumulative polypharmacy effect: if bruising is clinically relevant, lower-value adjuncts like this deserve a direct risk-benefit review.",
-      severity: "moderate",
+      "id": "medication-apixaban-5-mg-twice-daily__symptom-easy-bruising__bleeding-risk",
+      "source": "medication-apixaban-5-mg-twice-daily",
+      "target": "symptom-easy-bruising",
+      "label": "bleeding risk",
+      "explanation": "Apixaban commonly increases bruising and minor bleeding tendency.",
+      "severity": "high"
     },
     {
-      id: "edge-apixaban-turmeric",
-      source: "med-apixaban",
-      target: "supp-turmeric",
-      label: "bleeding amplifier",
-      explanation:
-        "Turmeric or curcumin can plausibly amplify bruising and minor bleeding in a patient already anticoagulated with apixaban. In polypharmacy review this matters because the supplement may feel benign, but it can still increase the clinical nuisance and uncertainty around bleeding tolerance without providing a clearly essential benefit.",
-      severity: "moderate",
+      "id": "medication-apixaban-5-mg-twice-daily__supplement-fish-oil-2-g-daily__additive-bleeding",
+      "source": "supplement-fish-oil-2-g-daily",
+      "target": "medication-apixaban-5-mg-twice-daily",
+      "label": "additive bleeding",
+      "explanation": "Fish oil may modestly increase bleeding tendency when combined with an anticoagulant.",
+      "severity": "moderate"
     },
     {
-      id: "edge-metoprolol-fatigue",
-      source: "med-metoprolol",
-      target: "symptom-fatigue",
-      label: "may contribute",
-      explanation:
-        "Metoprolol can be an important contributor to fatigue, lower exercise tolerance, and late-day sluggishness, particularly when resting heart rate is already in the high-50s to low-60s. It may still be appropriate for AF rate control, but it sits high on the list of medications that can make the overall regimen feel heavier than any single drug would suggest.",
-      severity: "moderate",
+      "id": "medication-apixaban-5-mg-twice-daily__supplement-turmeric-curcumin-1000-mg-daily__additive-bleeding",
+      "source": "supplement-turmeric-curcumin-1000-mg-daily",
+      "target": "medication-apixaban-5-mg-twice-daily",
+      "label": "additive bleeding",
+      "explanation": "Turmeric can increase bleeding tendency and may amplify bruising risk with apixaban.",
+      "severity": "moderate"
     },
     {
-      id: "edge-amlodipine-edema",
-      source: "med-amlodipine",
-      target: "symptom-edema",
-      label: "common culprit",
-      explanation:
-        "Amlodipine is a leading medication cause of peripheral edema and is especially relevant because the swelling worsens later in the day. In this case the edema may be multifactorial, but amlodipine deserves explicit scrutiny before reflexively layering on additional edema treatments.",
-      severity: "high",
+      "id": "supplement-fish-oil-2-g-daily__symptom-easy-bruising__bruise-contributor",
+      "source": "supplement-fish-oil-2-g-daily",
+      "target": "symptom-easy-bruising",
+      "label": "bruise contributor",
+      "explanation": "Fish oil may be contributing to the reported easy bruising, especially in the current stack.",
+      "severity": "moderate"
     },
     {
-      id: "edge-hfpef-edema",
-      source: "condition-hfpef",
-      target: "symptom-edema",
-      label: "also contributes",
-      explanation:
-        "The edema is not necessarily medication-only. HFpEF physiology and volume handling can still be part of the baseline problem, which is why the graph keeps both the disease process and the drug effect visible rather than forcing a single explanation.",
-      severity: "moderate",
+      "id": "supplement-turmeric-curcumin-1000-mg-daily__symptom-easy-bruising__bruise-contributor",
+      "source": "supplement-turmeric-curcumin-1000-mg-daily",
+      "target": "symptom-easy-bruising",
+      "label": "bruise contributor",
+      "explanation": "Turmeric is a plausible contributor to bruising in this anticoagulated patient.",
+      "severity": "moderate"
     },
     {
-      id: "edge-hctz-orthostasis",
-      source: "med-hctz",
-      target: "symptom-orthostasis",
-      label: "volume-related",
-      explanation:
-        "Hydrochlorothiazide can contribute to orthostatic symptoms through volume contraction and electrolyte effects, especially when the patient already runs low-normal pressures at home. In polypharmacy terms it may be reasonable alone, but it becomes more consequential when combined with several other BP-lowering or diuretic-like agents.",
-      severity: "moderate",
+      "id": "medication-metoprolol-succinate-100-mg-nightly__symptom-fatigue-low-stamina__fatigue-effect",
+      "source": "medication-metoprolol-succinate-100-mg-nightly",
+      "target": "symptom-fatigue-low-stamina",
+      "label": "fatigue effect",
+      "explanation": "Beta-blockade can reduce exercise tolerance and contribute to fatigue or low stamina.",
+      "severity": "moderate"
     },
     {
-      id: "edge-empagliflozin-orthostasis",
-      source: "med-empagliflozin",
-      target: "symptom-orthostasis",
-      label: "volume effect",
-      explanation:
-        "Empagliflozin has real cardiorenal value, but it can still nudge patients toward volume depletion, urinary frequency, and lightheadedness when layered onto diuretics and multiple antihypertensives. This is exactly the sort of beneficial drug whose downsides only become obvious once the rest of the regimen is considered around it.",
-      severity: "moderate",
+      "id": "medication-metoprolol-succinate-100-mg-nightly__symptom-lightheadedness-when-standing__orthostasis",
+      "source": "medication-metoprolol-succinate-100-mg-nightly",
+      "target": "symptom-lightheadedness-when-standing",
+      "label": "orthostasis",
+      "explanation": "Metoprolol can lower heart rate and blood pressure, worsening lightheadedness on standing.",
+      "severity": "moderate"
     },
     {
-      id: "edge-tamsulosin-orthostasis",
-      source: "med-tamsulosin",
-      target: "symptom-orthostasis",
-      label: "positional hypotension",
-      explanation:
-        "Tamsulosin can materially worsen postural dizziness, particularly in older adults already taking several blood-pressure-lowering medications. It is often tolerated in isolation, but here it likely participates in a cumulative orthostatic burden rather than acting as a single dramatic cause.",
-      severity: "moderate",
+      "id": "condition-hypertension__medication-metoprolol-succinate-100-mg-nightly__lowers-bp",
+      "source": "medication-metoprolol-succinate-100-mg-nightly",
+      "target": "condition-hypertension",
+      "label": "lowers BP",
+      "explanation": "Metoprolol contributes to blood pressure control.",
+      "severity": "info"
     },
     {
-      id: "edge-hctz-empagliflozin",
-      source: "med-hctz",
-      target: "med-empagliflozin",
-      label: "cumulative volume loss",
-      explanation:
-        "Hydrochlorothiazide and empagliflozin can work in the same direction with respect to volume depletion, nocturia, and orthostatic symptoms. The issue is not that the combination is forbidden, but that in a symptomatic patient the total physiologic load from both agents may exceed the apparent burden of either one alone.",
-      severity: "high",
+      "id": "condition-paroxysmal-atrial-fibrillation__medication-metoprolol-succinate-100-mg-nightly__rate-control",
+      "source": "medication-metoprolol-succinate-100-mg-nightly",
+      "target": "condition-paroxysmal-atrial-fibrillation",
+      "label": "rate control",
+      "explanation": "Metoprolol is being used for ventricular rate control in atrial fibrillation.",
+      "severity": "high"
     },
     {
-      id: "edge-metoprolol-tamsulosin",
-      source: "med-metoprolol",
-      target: "med-tamsulosin",
-      label: "orthostasis stack-up",
-      explanation:
-        "Metoprolol and tamsulosin can stack in a clinically meaningful way when the patient already reports low systolic readings and postural lightheadedness. This kind of interaction is best understood as cumulative hemodynamic drag from the whole regimen rather than a classic binary drug-drug contraindication.",
-      severity: "moderate",
+      "id": "condition-hypertension__medication-lisinopril-20-mg-every-morning__lowers-bp",
+      "source": "medication-lisinopril-20-mg-every-morning",
+      "target": "condition-hypertension",
+      "label": "lowers BP",
+      "explanation": "Lisinopril is used for blood pressure reduction.",
+      "severity": "info"
     },
     {
-      id: "edge-lisinopril-ckd",
-      source: "med-lisinopril",
-      target: "condition-ckd3a",
-      label: "renoprotective but monitor",
-      explanation:
-        "Lisinopril is directionally helpful for CKD with albuminuria, so it should not be framed as simple excess. The practical point is that renal function, potassium, and blood pressure need to be interpreted in the context of the rest of the regimen before reducing or escalating anything.",
-      severity: "info",
+      "id": "condition-type-2-diabetes-mellitus__medication-lisinopril-20-mg-every-morning__renal-protection",
+      "source": "medication-lisinopril-20-mg-every-morning",
+      "target": "condition-type-2-diabetes-mellitus",
+      "label": "renal protection",
+      "explanation": "ACE inhibition is commonly used in diabetes to help reduce kidney risk, especially with albuminuria.",
+      "severity": "moderate"
     },
     {
-      id: "edge-metformin-b12",
-      source: "med-metformin",
-      target: "lab-b12",
-      label: "can lower B12",
-      explanation:
-        "Long-term metformin use can contribute to borderline or frank B12 deficiency, which becomes relevant when fatigue or cognitive fog are part of the presentation. This is an example of a highly useful foundational drug that still creates downstream monitoring obligations in an older patient with a crowded medication list.",
-      severity: "low",
+      "id": "condition-chronic-kidney-disease-stage-3a__medication-lisinopril-20-mg-every-morning__albuminuria-benefit",
+      "source": "medication-lisinopril-20-mg-every-morning",
+      "target": "condition-chronic-kidney-disease-stage-3a",
+      "label": "albuminuria benefit",
+      "explanation": "Lisinopril can help reduce proteinuria and slow CKD progression when tolerated.",
+      "severity": "moderate"
     },
     {
-      id: "edge-b12-fatigue",
-      source: "lab-b12",
-      target: "symptom-fatigue",
-      label: "possible contributor",
-      explanation:
-        "Borderline B12 is unlikely to explain the full symptom burden on its own, but it is plausible background noise in the fatigue and cognitive-fog story. In a polypharmacy case, modest abnormalities like this matter because they can be masked by attributing everything to medications alone.",
-      severity: "low",
+      "id": "lab-urine-albumin-creatinine-ratio-68-mg-g-elevated__medication-lisinopril-20-mg-every-morning__reduces-albuminuria",
+      "source": "medication-lisinopril-20-mg-every-morning",
+      "target": "lab-urine-albumin-creatinine-ratio-68-mg-g-elevated",
+      "label": "reduces albuminuria",
+      "explanation": "Elevated urine albumin is a direct treatment target for ACE inhibitor therapy.",
+      "severity": "moderate"
     },
     {
-      id: "edge-osa-fatigue",
-      source: "condition-osa",
-      target: "symptom-fatigue",
-      label: "major non-drug driver",
-      explanation:
-        "Inconsistent CPAP use means OSA remains a strong non-pharmacologic explanation for fatigue, poor sleep, and cognitive drag. This matters because it prevents over-assigning the entire symptom burden to medications and keeps the review balanced between regimen simplification and untreated physiology.",
-      severity: "high",
+      "id": "medication-lisinopril-20-mg-every-morning__symptom-lightheadedness-when-standing__bp-lowering",
+      "source": "medication-lisinopril-20-mg-every-morning",
+      "target": "symptom-lightheadedness-when-standing",
+      "label": "BP lowering",
+      "explanation": "ACE inhibitor effect can contribute to low blood pressure symptoms in a tightly controlled patient.",
+      "severity": "moderate"
     },
     {
-      id: "edge-osa-nocturia",
-      source: "condition-osa",
-      target: "symptom-nocturia",
-      label: "sleep fragmentation loop",
-      explanation:
-        "OSA can worsen nocturia and sleep fragmentation through repeated arousal, sympathetic activation, and hormonal signaling changes overnight. If CPAP adherence is poor, adding more sedative or urinary medications without addressing the sleep driver risks increasing treatment burden without solving the root problem.",
-      severity: "moderate",
+      "id": "condition-hypertension__medication-amlodipine-10-mg-every-morning__lowers-bp",
+      "source": "medication-amlodipine-10-mg-every-morning",
+      "target": "condition-hypertension",
+      "label": "lowers BP",
+      "explanation": "Amlodipine contributes to antihypertensive control.",
+      "severity": "info"
     },
     {
-      id: "edge-trazodone-fatigue",
-      source: "med-trazodone",
-      target: "symptom-fatigue",
-      label: "next-day sedation",
-      explanation:
-        "Trazodone may help sleep onset, but in an older patient with OSA, polypharmacy, and morning lightheadedness it can also add next-day sedation and cognitive slowing. That makes it a classic medication to revisit early during deprescribing discussions, especially if the underlying sleep disorder remains undertreated.",
-      severity: "moderate",
+      "id": "medication-amlodipine-10-mg-every-morning__symptom-bilateral-ankle-edema-worse-in-the-evening__causes-edema",
+      "source": "medication-amlodipine-10-mg-every-morning",
+      "target": "symptom-bilateral-ankle-edema-worse-in-the-evening",
+      "label": "causes edema",
+      "explanation": "Amlodipine commonly causes dose-related peripheral ankle edema.",
+      "severity": "high"
     },
     {
-      id: "edge-diagnostic-orthostatics",
-      source: "diagnostic-orthostatics",
-      target: "symptom-orthostasis",
-      label: "high-yield check",
-      explanation:
-        "Formal orthostatic vitals are a high-yield next step because they can quickly distinguish vague fatigue from a reproducible hemodynamic problem. In this patient they would help decide whether the first move should be regimen simplification rather than adding still more symptom-directed treatment.",
-      severity: "info",
+      "id": "medication-amlodipine-10-mg-every-morning__symptom-lightheadedness-when-standing__bp-lowering",
+      "source": "medication-amlodipine-10-mg-every-morning",
+      "target": "symptom-lightheadedness-when-standing",
+      "label": "BP lowering",
+      "explanation": "Amlodipine can contribute to orthostatic symptoms when blood pressure runs low.",
+      "severity": "moderate"
     },
     {
-      id: "edge-diagnostic-cpap",
-      source: "diagnostic-cpap",
-      target: "condition-osa",
-      label: "clarifies driver",
-      explanation:
-        "A CPAP adherence review is disproportionately useful because it helps separate medication toxicity from undertreated sleep apnea. Without that information, the clinician risks compensating for an untreated physiologic driver by progressively complicating the regimen.",
-      severity: "info",
+      "id": "condition-hypertension__medication-hydrochlorothiazide-25-mg-every-morning__lowers-bp",
+      "source": "medication-hydrochlorothiazide-25-mg-every-morning",
+      "target": "condition-hypertension",
+      "label": "lowers BP",
+      "explanation": "Hydrochlorothiazide contributes to blood pressure control.",
+      "severity": "info"
     },
     {
-      id: "edge-goal-simplify",
-      source: "goal-simplify",
-      target: "med-amlodipine",
-      label: "candidate review target",
-      explanation:
-        "Because amlodipine may be worsening edema while overall blood pressure is already fairly soft, it is one of the more logical candidates for structured simplification review. It is not automatically wrong therapy, but it has a symptom profile that may be misread as new disease and thereby trigger prescribing cascades.",
-      severity: "info",
+      "id": "medication-hydrochlorothiazide-25-mg-every-morning__symptom-lightheadedness-when-standing__volume-depletion",
+      "source": "medication-hydrochlorothiazide-25-mg-every-morning",
+      "target": "symptom-lightheadedness-when-standing",
+      "label": "volume depletion",
+      "explanation": "Diuretic effect can reduce intravascular volume and worsen orthostatic lightheadedness.",
+      "severity": "high"
     },
+    {
+      "id": "lab-potassium-3-5-mmol-l-low-normal__medication-hydrochlorothiazide-25-mg-every-morning__lowers-potassium",
+      "source": "medication-hydrochlorothiazide-25-mg-every-morning",
+      "target": "lab-potassium-3-5-mmol-l-low-normal",
+      "label": "lowers potassium",
+      "explanation": "Thiazide diuretics commonly lower potassium; this may explain the low-normal value.",
+      "severity": "moderate"
+    },
+    {
+      "id": "medication-hydrochlorothiazide-25-mg-every-morning__symptom-nocturia-3-4-times-nightly__diuretic-effect",
+      "source": "medication-hydrochlorothiazide-25-mg-every-morning",
+      "target": "symptom-nocturia-3-4-times-nightly",
+      "label": "diuretic effect",
+      "explanation": "Daytime diuresis can still worsen urinary frequency and contribute to nocturia in some patients.",
+      "severity": "low"
+    },
+    {
+      "id": "condition-type-2-diabetes-mellitus__medication-metformin-xr-1000-mg-twice-daily-with-meals__glucose-control",
+      "source": "medication-metformin-xr-1000-mg-twice-daily-with-meals",
+      "target": "condition-type-2-diabetes-mellitus",
+      "label": "glucose control",
+      "explanation": "Metformin is being used to improve glycemic control in type 2 diabetes.",
+      "severity": "high"
+    },
+    {
+      "id": "lab-b12-298-pg-ml-borderline__medication-metformin-xr-1000-mg-twice-daily-with-meals__b12-lowering",
+      "source": "medication-metformin-xr-1000-mg-twice-daily-with-meals",
+      "target": "lab-b12-298-pg-ml-borderline",
+      "label": "B12 lowering",
+      "explanation": "Long-term metformin use can reduce B12 absorption and contribute to a borderline level.",
+      "severity": "moderate"
+    },
+    {
+      "id": "lab-b12-298-pg-ml-borderline__symptom-fatigue-low-stamina__possible-contributor",
+      "source": "lab-b12-298-pg-ml-borderline",
+      "target": "symptom-fatigue-low-stamina",
+      "label": "possible contributor",
+      "explanation": "Borderline B12 can contribute to fatigue, though it may not be the only cause here.",
+      "severity": "low"
+    },
+    {
+      "id": "lab-b12-298-pg-ml-borderline__symptom-mild-cognitive-fog-by-late-afternoon__possible-contributor",
+      "source": "lab-b12-298-pg-ml-borderline",
+      "target": "symptom-mild-cognitive-fog-by-late-afternoon",
+      "label": "possible contributor",
+      "explanation": "Borderline B12 status can contribute to cognitive slowing or brain fog.",
+      "severity": "low"
+    },
+    {
+      "id": "condition-type-2-diabetes-mellitus__medication-empagliflozin-25-mg-every-morning__glucose-control",
+      "source": "medication-empagliflozin-25-mg-every-morning",
+      "target": "condition-type-2-diabetes-mellitus",
+      "label": "glucose control",
+      "explanation": "Empagliflozin supports glycemic control in type 2 diabetes.",
+      "severity": "high"
+    },
+    {
+      "id": "condition-heart-failure-with-preserved-ejection-fraction-chronic-lower-extremity-edema-history__medication-empagliflozin-25-mg-every-morning__hf-benefit",
+      "source": "medication-empagliflozin-25-mg-every-morning",
+      "target": "condition-heart-failure-with-preserved-ejection-fraction-chronic-lower-extremity-edema-history",
+      "label": "HF benefit",
+      "explanation": "Empagliflozin has evidence for heart failure benefit, including HFpEF populations.",
+      "severity": "moderate"
+    },
+    {
+      "id": "condition-chronic-kidney-disease-stage-3a__medication-empagliflozin-25-mg-every-morning__renal-benefit",
+      "source": "medication-empagliflozin-25-mg-every-morning",
+      "target": "condition-chronic-kidney-disease-stage-3a",
+      "label": "renal benefit",
+      "explanation": "Empagliflozin has cardiorenal protective benefit in CKD when kidney function allows use.",
+      "severity": "moderate"
+    },
+    {
+      "id": "medication-empagliflozin-25-mg-every-morning__symptom-lightheadedness-when-standing__volume-loss",
+      "source": "medication-empagliflozin-25-mg-every-morning",
+      "target": "symptom-lightheadedness-when-standing",
+      "label": "volume loss",
+      "explanation": "SGLT2-related osmotic diuresis can worsen orthostatic symptoms, especially with other BP-lowering drugs.",
+      "severity": "moderate"
+    },
+    {
+      "id": "medication-empagliflozin-25-mg-every-morning__symptom-nocturia-3-4-times-nightly__osmotic-diuresis",
+      "source": "medication-empagliflozin-25-mg-every-morning",
+      "target": "symptom-nocturia-3-4-times-nightly",
+      "label": "osmotic diuresis",
+      "explanation": "Increased urinary glucose and diuresis can contribute to urinary frequency and nocturia.",
+      "severity": "moderate"
+    },
+    {
+      "id": "medication-empagliflozin-25-mg-every-morning__medication-hydrochlorothiazide-25-mg-every-morning__additive-diuresis",
+      "source": "medication-empagliflozin-25-mg-every-morning",
+      "target": "medication-hydrochlorothiazide-25-mg-every-morning",
+      "label": "additive diuresis",
+      "explanation": "Together these can increase volume depletion, orthostasis, and urinary frequency.",
+      "severity": "high"
+    },
+    {
+      "id": "goal-maintain-stroke-prevention-and-cardiometabolic-risk-reduction__medication-atorvastatin-40-mg-nightly__risk-reduction",
+      "source": "medication-atorvastatin-40-mg-nightly",
+      "target": "goal-maintain-stroke-prevention-and-cardiometabolic-risk-reduction",
+      "label": "risk reduction",
+      "explanation": "Statin therapy directly supports ASCVD risk reduction in this high-risk patient.",
+      "severity": "high"
+    },
+    {
+      "id": "goal-maintain-stroke-prevention-and-cardiometabolic-risk-reduction__lab-triglycerides-210-mg-dl-elevated__residual-risk",
+      "source": "lab-triglycerides-210-mg-dl-elevated",
+      "target": "goal-maintain-stroke-prevention-and-cardiometabolic-risk-reduction",
+      "label": "residual risk",
+      "explanation": "Elevated triglycerides indicate persistent cardiometabolic risk despite current therapy.",
+      "severity": "moderate"
+    },
+    {
+      "id": "goal-maintain-stroke-prevention-and-cardiometabolic-risk-reduction__lab-urine-albumin-creatinine-ratio-68-mg-g-elevated__vascular-risk",
+      "source": "lab-urine-albumin-creatinine-ratio-68-mg-g-elevated",
+      "target": "goal-maintain-stroke-prevention-and-cardiometabolic-risk-reduction",
+      "label": "vascular risk",
+      "explanation": "Albuminuria is a marker of ongoing renal and cardiovascular risk that directly informs this goal.",
+      "severity": "moderate"
+    },
+    {
+      "id": "condition-paroxysmal-atrial-fibrillation__goal-maintain-stroke-prevention-and-cardiometabolic-risk-reduction__stroke-risk",
+      "source": "condition-paroxysmal-atrial-fibrillation",
+      "target": "goal-maintain-stroke-prevention-and-cardiometabolic-risk-reduction",
+      "label": "stroke risk",
+      "explanation": "Atrial fibrillation is a key driver of stroke-prevention strategy.",
+      "severity": "high"
+    },
+    {
+      "id": "condition-type-2-diabetes-mellitus__goal-maintain-stroke-prevention-and-cardiometabolic-risk-reduction__cardiometabolic-risk",
+      "source": "condition-type-2-diabetes-mellitus",
+      "target": "goal-maintain-stroke-prevention-and-cardiometabolic-risk-reduction",
+      "label": "cardiometabolic risk",
+      "explanation": "Diabetes materially increases cardiovascular and renal risk and is central to this goal.",
+      "severity": "high"
+    },
+    {
+      "id": "condition-chronic-kidney-disease-stage-3a__goal-maintain-stroke-prevention-and-cardiometabolic-risk-reduction__renal-risk",
+      "source": "condition-chronic-kidney-disease-stage-3a",
+      "target": "goal-maintain-stroke-prevention-and-cardiometabolic-risk-reduction",
+      "label": "renal risk",
+      "explanation": "CKD is a major cardiovascular risk amplifier and affects medication safety.",
+      "severity": "high"
+    },
+    {
+      "id": "condition-heart-failure-with-preserved-ejection-fraction-chronic-lower-extremity-edema-history__goal-maintain-stroke-prevention-and-cardiometabolic-risk-reduction__hf-risk",
+      "source": "condition-heart-failure-with-preserved-ejection-fraction-chronic-lower-extremity-edema-history",
+      "target": "goal-maintain-stroke-prevention-and-cardiometabolic-risk-reduction",
+      "label": "HF risk",
+      "explanation": "HFpEF drives symptoms, hospitalization risk, and cardiometabolic management priorities.",
+      "severity": "high"
+    },
+    {
+      "id": "condition-hypertension__goal-maintain-stroke-prevention-and-cardiometabolic-risk-reduction__bp-risk",
+      "source": "condition-hypertension",
+      "target": "goal-maintain-stroke-prevention-and-cardiometabolic-risk-reduction",
+      "label": "BP risk",
+      "explanation": "Hypertension is a core modifiable contributor to stroke and cardiovascular risk.",
+      "severity": "high"
+    },
+    {
+      "id": "condition-heart-failure-with-preserved-ejection-fraction-chronic-lower-extremity-edema-history__diagnostic-echocardiogram-last-year-preserved-ef-with-mild-left-atrial-enlargement__supports-diagnosis",
+      "source": "diagnostic-echocardiogram-last-year-preserved-ef-with-mild-left-atrial-enlargement",
+      "target": "condition-heart-failure-with-preserved-ejection-fraction-chronic-lower-extremity-edema-history",
+      "label": "supports diagnosis",
+      "explanation": "Preserved EF helps support the HFpEF phenotype in the right clinical context.",
+      "severity": "moderate"
+    },
+    {
+      "id": "condition-paroxysmal-atrial-fibrillation__diagnostic-echocardiogram-last-year-preserved-ef-with-mild-left-atrial-enlargement__la-enlargement",
+      "source": "diagnostic-echocardiogram-last-year-preserved-ef-with-mild-left-atrial-enlargement",
+      "target": "condition-paroxysmal-atrial-fibrillation",
+      "label": "LA enlargement",
+      "explanation": "Left atrial enlargement is structurally relevant to atrial fibrillation burden and recurrence risk.",
+      "severity": "moderate"
+    },
+    {
+      "id": "diagnostic-sleep-study-3-years-ago-confirming-osa__goal-improve-sleep-and-daytime-function__sleep-driver",
+      "source": "diagnostic-sleep-study-3-years-ago-confirming-osa",
+      "target": "goal-improve-sleep-and-daytime-function",
+      "label": "sleep driver",
+      "explanation": "Confirmed OSA is a direct driver of fragmented sleep and daytime dysfunction.",
+      "severity": "high"
+    },
+    {
+      "id": "goal-improve-sleep-and-daytime-function__symptom-poor-sleep-quality-despite-trazodone__primary-barrier",
+      "source": "symptom-poor-sleep-quality-despite-trazodone",
+      "target": "goal-improve-sleep-and-daytime-function",
+      "label": "primary barrier",
+      "explanation": "Poor sleep quality directly opposes the stated goal of better sleep and daytime function.",
+      "severity": "high"
+    },
+    {
+      "id": "goal-improve-sleep-and-daytime-function__symptom-nocturia-3-4-times-nightly__sleep-disruption",
+      "source": "symptom-nocturia-3-4-times-nightly",
+      "target": "goal-improve-sleep-and-daytime-function",
+      "label": "sleep disruption",
+      "explanation": "Repeated nocturnal urination is a direct cause of fragmented sleep.",
+      "severity": "high"
+    },
+    {
+      "id": "goal-improve-sleep-and-daytime-function__symptom-fatigue-low-stamina__daytime-impairment",
+      "source": "symptom-fatigue-low-stamina",
+      "target": "goal-improve-sleep-and-daytime-function",
+      "label": "daytime impairment",
+      "explanation": "Fatigue is a direct daytime consequence relevant to this goal.",
+      "severity": "high"
+    },
+    {
+      "id": "goal-improve-sleep-and-daytime-function__symptom-mild-cognitive-fog-by-late-afternoon__daytime-impact",
+      "source": "symptom-mild-cognitive-fog-by-late-afternoon",
+      "target": "goal-improve-sleep-and-daytime-function",
+      "label": "daytime impact",
+      "explanation": "Cognitive fog is a direct marker of impaired daytime function.",
+      "severity": "moderate"
+    },
+    {
+      "id": "condition-heart-failure-with-preserved-ejection-fraction-chronic-lower-extremity-edema-history__symptom-exertional-dyspnea-climbing-stairs__dyspnea-cause",
+      "source": "condition-heart-failure-with-preserved-ejection-fraction-chronic-lower-extremity-edema-history",
+      "target": "symptom-exertional-dyspnea-climbing-stairs",
+      "label": "dyspnea cause",
+      "explanation": "HFpEF commonly causes exertional shortness of breath from elevated filling pressures.",
+      "severity": "high"
+    },
+    {
+      "id": "condition-heart-failure-with-preserved-ejection-fraction-chronic-lower-extremity-edema-history__symptom-bilateral-ankle-edema-worse-in-the-evening__edema-cause",
+      "source": "condition-heart-failure-with-preserved-ejection-fraction-chronic-lower-extremity-edema-history",
+      "target": "symptom-bilateral-ankle-edema-worse-in-the-evening",
+      "label": "edema cause",
+      "explanation": "Heart failure can contribute to dependent lower-extremity edema.",
+      "severity": "high"
+    },
+    {
+      "id": "condition-heart-failure-with-preserved-ejection-fraction-chronic-lower-extremity-edema-history__lab-nt-probnp-412-pg-ml-mildly-elevated__supports-congestion",
+      "source": "lab-nt-probnp-412-pg-ml-mildly-elevated",
+      "target": "condition-heart-failure-with-preserved-ejection-fraction-chronic-lower-extremity-edema-history",
+      "label": "supports congestion",
+      "explanation": "Mildly elevated NT-proBNP supports a heart-failure/congestion signal in context.",
+      "severity": "moderate"
+    },
+    {
+      "id": "lab-nt-probnp-412-pg-ml-mildly-elevated__symptom-exertional-dyspnea-climbing-stairs__congestion-marker",
+      "source": "lab-nt-probnp-412-pg-ml-mildly-elevated",
+      "target": "symptom-exertional-dyspnea-climbing-stairs",
+      "label": "congestion marker",
+      "explanation": "An elevated natriuretic peptide can align with dyspnea related to cardiac filling pressure or congestion.",
+      "severity": "moderate"
+    },
+    {
+      "id": "condition-benign-prostatic-hyperplasia__symptom-nocturia-3-4-times-nightly__urinary-obstruction",
+      "source": "condition-benign-prostatic-hyperplasia",
+      "target": "symptom-nocturia-3-4-times-nightly",
+      "label": "urinary obstruction",
+      "explanation": "BPH is a common direct contributor to nocturia.",
+      "severity": "high"
+    },
+    {
+      "id": "goal-clarify-medication-contributors-to-fatigue-edema-and-orthostasis__medication-metoprolol-succinate-100-mg-nightly__review-target",
+      "source": "goal-clarify-medication-contributors-to-fatigue-edema-and-orthostasis",
+      "target": "medication-metoprolol-succinate-100-mg-nightly",
+      "label": "review target",
+      "explanation": "Metoprolol is a plausible contributor to fatigue and orthostatic symptoms.",
+      "severity": "moderate"
+    },
+    {
+      "id": "goal-clarify-medication-contributors-to-fatigue-edema-and-orthostasis__medication-amlodipine-10-mg-every-morning__review-target",
+      "source": "goal-clarify-medication-contributors-to-fatigue-edema-and-orthostasis",
+      "target": "medication-amlodipine-10-mg-every-morning",
+      "label": "review target",
+      "explanation": "Amlodipine is a strong candidate contributor to ankle edema and possibly low-BP symptoms.",
+      "severity": "high"
+    },
+    {
+      "id": "goal-clarify-medication-contributors-to-fatigue-edema-and-orthostasis__medication-hydrochlorothiazide-25-mg-every-morning__review-target",
+      "source": "goal-clarify-medication-contributors-to-fatigue-edema-and-orthostasis",
+      "target": "medication-hydrochlorothiazide-25-mg-every-morning",
+      "label": "review target",
+      "explanation": "Hydrochlorothiazide may contribute to orthostasis, nocturia, and low potassium.",
+      "severity": "high"
+    },
+    {
+      "id": "goal-clarify-medication-contributors-to-fatigue-edema-and-orthostasis__medication-lisinopril-20-mg-every-morning__review-target",
+      "source": "goal-clarify-medication-contributors-to-fatigue-edema-and-orthostasis",
+      "target": "medication-lisinopril-20-mg-every-morning",
+      "label": "review target",
+      "explanation": "Lisinopril may be part of cumulative blood-pressure lowering contributing to orthostasis.",
+      "severity": "moderate"
+    },
+    {
+      "id": "goal-clarify-medication-contributors-to-fatigue-edema-and-orthostasis__medication-empagliflozin-25-mg-every-morning__review-target",
+      "source": "goal-clarify-medication-contributors-to-fatigue-edema-and-orthostasis",
+      "target": "medication-empagliflozin-25-mg-every-morning",
+      "label": "review target",
+      "explanation": "Empagliflozin can add diuresis and worsen lightheadedness or nocturia.",
+      "severity": "moderate"
+    },
+    {
+      "id": "diagnostic-orthostatic-vitals-not-yet-formally-documented__goal-clarify-medication-contributors-to-fatigue-edema-and-orthostasis__needed-data",
+      "source": "diagnostic-orthostatic-vitals-not-yet-formally-documented",
+      "target": "goal-clarify-medication-contributors-to-fatigue-edema-and-orthostasis",
+      "label": "needed data",
+      "explanation": "Formal orthostatic vitals are directly needed to evaluate medication-related orthostasis.",
+      "severity": "high"
+    },
+    {
+      "id": "diagnostic-medication-reconciliation-with-home-bottles-still-pending__goal-reduce-polypharmacy-burden-where-reasonable__required-review",
+      "source": "diagnostic-medication-reconciliation-with-home-bottles-still-pending",
+      "target": "goal-reduce-polypharmacy-burden-where-reasonable",
+      "label": "required review",
+      "explanation": "Accurate reconciliation is necessary before meaningful deprescribing or simplification.",
+      "severity": "high"
+    },
+    {
+      "id": "diagnostic-medication-reconciliation-with-home-bottles-still-pending__goal-clarify-medication-contributors-to-fatigue-edema-and-orthostasis__required-review",
+      "source": "diagnostic-medication-reconciliation-with-home-bottles-still-pending",
+      "target": "goal-clarify-medication-contributors-to-fatigue-edema-and-orthostasis",
+      "label": "required review",
+      "explanation": "Medication/supplement verification is essential to identify true contributors to symptoms.",
+      "severity": "high"
+    },
+    {
+      "id": "goal-reduce-polypharmacy-burden-where-reasonable__medication-apixaban-5-mg-twice-daily__high-value-therapy",
+      "source": "medication-apixaban-5-mg-twice-daily",
+      "target": "goal-reduce-polypharmacy-burden-where-reasonable",
+      "label": "high-value therapy",
+      "explanation": "Apixaban has clear stroke-prevention value, so it is generally a poor deprescribing target absent a new contraindication.",
+      "severity": "moderate"
+    },
+    {
+      "id": "goal-reduce-polypharmacy-burden-where-reasonable__medication-empagliflozin-25-mg-every-morning__high-value-therapy",
+      "source": "medication-empagliflozin-25-mg-every-morning",
+      "target": "goal-reduce-polypharmacy-burden-where-reasonable",
+      "label": "high-value therapy",
+      "explanation": "Empagliflozin carries meaningful cardiorenal benefit, so simplification should weigh this benefit carefully.",
+      "severity": "moderate"
+    },
+    {
+      "id": "goal-reduce-polypharmacy-burden-where-reasonable__medication-lisinopril-20-mg-every-morning__high-value-therapy",
+      "source": "medication-lisinopril-20-mg-every-morning",
+      "target": "goal-reduce-polypharmacy-burden-where-reasonable",
+      "label": "high-value therapy",
+      "explanation": "Lisinopril supports blood pressure, albuminuria, and kidney-risk management, making it relatively high-yield.",
+      "severity": "moderate"
+    },
+    {
+      "id": "goal-reduce-polypharmacy-burden-where-reasonable__medication-atorvastatin-40-mg-nightly__high-value-therapy",
+      "source": "medication-atorvastatin-40-mg-nightly",
+      "target": "goal-reduce-polypharmacy-burden-where-reasonable",
+      "label": "high-value therapy",
+      "explanation": "Atorvastatin is a foundational cardiometabolic risk-reduction therapy and not an obvious deprescribing target.",
+      "severity": "moderate"
+    },
+    {
+      "id": "goal-reduce-polypharmacy-burden-where-reasonable__supplement-fish-oil-2-g-daily__deprescribe-candidate",
+      "source": "supplement-fish-oil-2-g-daily",
+      "target": "goal-reduce-polypharmacy-burden-where-reasonable",
+      "label": "deprescribe candidate",
+      "explanation": "Given bruising and uncertain net benefit in this context, fish oil is a reasonable simplification target.",
+      "severity": "moderate"
+    },
+    {
+      "id": "goal-reduce-polypharmacy-burden-where-reasonable__supplement-turmeric-curcumin-1000-mg-daily__deprescribe-candidate",
+      "source": "supplement-turmeric-curcumin-1000-mg-daily",
+      "target": "goal-reduce-polypharmacy-burden-where-reasonable",
+      "label": "deprescribe candidate",
+      "explanation": "Turmeric adds bleeding-risk complexity and is a reasonable candidate for stack simplification.",
+      "severity": "moderate"
+    },
+    {
+      "id": "condition-chronic-kidney-disease-stage-3a__lab-urine-albumin-creatinine-ratio-68-mg-g-elevated__kidney-damage",
+      "source": "condition-chronic-kidney-disease-stage-3a",
+      "target": "lab-urine-albumin-creatinine-ratio-68-mg-g-elevated",
+      "label": "kidney damage",
+      "explanation": "Albuminuria is a direct marker of ongoing kidney injury in CKD and diabetes.",
+      "severity": "high"
+    }
   ],
-  notes: [
-    "This example graph is precomputed for the shared John Doe demonstration patient.",
-    "It emphasizes polypharmacy, cumulative hemodynamic effects, bleeding amplification from supplements, and non-drug contributors such as untreated OSA.",
-  ],
+  "notes": [
+    "This graph is generated from the structured patient profile only.",
+    "Edges reflect clinically meaningful direct relationships or interaction risks rather than cosmetic connectivity."
+  ]
 };
 
 export function buildExamplePatientRecord(): PatientRecord {
@@ -652,4 +1106,11 @@ export function buildExamplePatientRecord(): PatientRecord {
 
 export function isExamplePatientId(id: string) {
   return id === EXAMPLE_PATIENT_ID;
+}
+
+export function isExamplePatientRecord(patient: {
+  name: string;
+  summary: string;
+}) {
+  return patient.name === "John Doe" && patient.summary === examplePatientSummary;
 }
