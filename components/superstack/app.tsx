@@ -29,11 +29,11 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { initialArtifactData, useArtifact } from "@/hooks/use-artifact";
 import { DEFAULT_CHAT_MODEL } from "@/lib/ai/models";
-import { createInitialIntakeMessages } from "@/lib/superstack/intake";
+import { buildInitialIntakeSystemInstruction } from "@/lib/superstack/intake";
 import { isPlaceholderPatientName } from "@/lib/superstack/naming";
 import type { PatientProfile, PatientRecord } from "@/lib/superstack/types";
 import type { Attachment, ChatMessage } from "@/lib/types";
-import { fetcher, fetchWithErrorHandlers } from "@/lib/utils";
+import { fetcher, fetchWithErrorHandlers, generateUUID } from "@/lib/utils";
 
 const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 
@@ -240,21 +240,8 @@ function PatientChatPane({
 
   const initialMessages = useMemo(
     () =>
-      mode === "intake"
-        ? patient.intakeMessages.length > 0
-          ? patient.intakeMessages
-          : createInitialIntakeMessages({
-              messageId: `intake-welcome-${patient.id}`,
-              createdAt: patient.createdAt,
-            })
-        : patient.consultMessages,
-    [
-      mode,
-      patient.consultMessages,
-      patient.createdAt,
-      patient.id,
-      patient.intakeMessages,
-    ]
+      mode === "intake" ? patient.intakeMessages : patient.consultMessages,
+    [mode, patient.consultMessages, patient.intakeMessages]
   );
 
   const {
@@ -268,6 +255,7 @@ function PatientChatPane({
   } = useChat<ChatMessage>({
     id: `${mode}-${patient.id}`,
     messages: initialMessages,
+    generateId: generateUUID,
     transport: new DefaultChatTransport({
       api: getPatientsApiPath(patient.id, `/${mode}`),
       fetch: fetchWithErrorHandlers,
@@ -286,6 +274,10 @@ function PatientChatPane({
       );
     },
     onFinish: async () => {
+      setMessages((currentMessages) =>
+        currentMessages.filter((message) => message.role !== "system")
+      );
+
       if (mode === "intake") {
         await onRefreshPatient();
         await onRefreshList();
@@ -294,6 +286,7 @@ function PatientChatPane({
   });
 
   const canFinishSetup = hasPatientData(patient.profile, messages);
+  const hasAutoWelcomedRef = useRef(false);
   const graphRegenerationTimeoutRef = useRef<ReturnType<
     typeof setTimeout
   > | null>(null);
@@ -301,6 +294,37 @@ function PatientChatPane({
   useEffect(() => {
     onCanFinishSetupChange(canFinishSetup);
   }, [canFinishSetup, onCanFinishSetupChange]);
+
+  useEffect(() => {
+    if (mode !== "intake") {
+      hasAutoWelcomedRef.current = false;
+      return;
+    }
+
+    const hasVisibleConversation = messages.some(
+      (message) => message.role !== "system"
+    );
+
+    if (
+      hasVisibleConversation ||
+      status !== "ready" ||
+      hasAutoWelcomedRef.current
+    ) {
+      return;
+    }
+
+    hasAutoWelcomedRef.current = true;
+    sendMessage({
+      role: "system",
+      parts: [
+        {
+          type: "text",
+          text: buildInitialIntakeSystemInstruction(patient.name),
+        },
+      ],
+    });
+  }, [messages, mode, patient.name, sendMessage, status]);
+
   const hasMountedForGraphSchedulingRef = useRef(false);
 
   useEffect(() => {
@@ -582,13 +606,36 @@ export function SuperstackApp() {
       return;
     }
 
-    await fetch(getPatientsApiPath(patient.id), {
+    const response = await fetch(getPatientsApiPath(patient.id), {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ setupComplete: true }),
+      body: JSON.stringify({
+        setupComplete: true,
+        selectedModelId: DEFAULT_CHAT_MODEL,
+      }),
     });
 
-    await Promise.all([mutatePatient(), mutatePatients()]);
+    if (!response.ok) {
+      throw new Error(`Failed to finish setup: ${response.status}`);
+    }
+
+    const json = (await response.json()) as { patient: PatientRecord };
+
+    await mutatePatient({ patient: json.patient }, { revalidate: false });
+    await mutatePatients(
+      (current) =>
+        current
+          ? {
+              patients: current.patients.map((currentPatient) =>
+                currentPatient.id === json.patient.id
+                  ? json.patient
+                  : currentPatient
+              ),
+            }
+          : current,
+      { revalidate: false }
+    );
+
     setModeOverride("consult");
   }
 

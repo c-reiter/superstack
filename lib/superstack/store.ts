@@ -1,13 +1,18 @@
+import type { VisibilityType } from "@/components/chat/visibility-selector";
 import { generateCurrentPatientGraph } from "@/lib/ai/superstack-graph";
 import {
   createPatient as createPatientRow,
+  getMessagesByChatId,
   getPatientById,
   getPatientsByUserId,
+  replaceMessagesByChatId,
+  saveChat,
+  updateChatTitleById,
   updatePatientById,
 } from "@/lib/db/queries";
-import type { Patient as DbPatient } from "@/lib/db/schema";
+import type { DBMessage, Patient as DbPatient } from "@/lib/db/schema";
 import type { ChatMessage } from "@/lib/types";
-import { createInitialIntakeMessages } from "./intake";
+import { convertToUIMessages, generateUUID } from "@/lib/utils";
 import { getNextPlaceholderPatientName } from "./naming";
 import {
   emptyPatientProfile,
@@ -43,6 +48,140 @@ function safeParseGraph(value: string | null | undefined): PatientGraph | null {
   return null;
 }
 
+function buildPatientChatTitle(name: string, mode: "intake" | "consult") {
+  return `${name} · ${mode === "intake" ? "Intake" : "Consult"}`;
+}
+
+function isUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value
+  );
+}
+
+function toDbMessages({
+  chatId,
+  messages,
+}: {
+  chatId: string;
+  messages: ChatMessage[];
+}): DBMessage[] {
+  return messages.map((message, index) => ({
+    id: isUuid(message.id) ? message.id : generateUUID(),
+    chatId,
+    role: message.role,
+    parts: message.parts,
+    attachments: [],
+    createdAt: message.metadata?.createdAt
+      ? new Date(message.metadata.createdAt)
+      : new Date(Date.now() + index),
+  }));
+}
+
+async function hydratePatientWithMessages(
+  patient: DbPatient
+): Promise<PatientRecord> {
+  const intakeMessages = patient.intakeChatId
+    ? convertToUIMessages(
+        await getMessagesByChatId({ id: patient.intakeChatId })
+      )
+    : safeParse<ChatMessage[]>(patient.intakeMessages, []);
+  const consultMessages = patient.consultChatId
+    ? convertToUIMessages(
+        await getMessagesByChatId({ id: patient.consultChatId })
+      )
+    : safeParse<ChatMessage[]>(patient.consultMessages, []);
+
+  return {
+    id: patient.id,
+    name: patient.name,
+    summary: patient.summary,
+    setupComplete: patient.setupComplete,
+    profile: safeParse<PatientProfile>(patient.profile, emptyPatientProfile()),
+    currentGraph: safeParseGraph(patient.currentGraph),
+    intakeMessages,
+    consultMessages,
+    createdAt: patient.createdAt.toISOString(),
+    updatedAt: patient.updatedAt.toISOString(),
+  };
+}
+
+async function ensurePatientChats(patient: DbPatient) {
+  let nextPatient = patient;
+  const legacyIntakeMessages = safeParse<ChatMessage[]>(
+    patient.intakeMessages,
+    []
+  );
+  const legacyConsultMessages = safeParse<ChatMessage[]>(
+    patient.consultMessages,
+    []
+  );
+
+  let intakeChatId = patient.intakeChatId;
+  if (!intakeChatId) {
+    intakeChatId = generateUUID();
+    await saveChat({
+      id: intakeChatId,
+      userId: patient.userId,
+      title: buildPatientChatTitle(patient.name, "intake"),
+      visibility: "private" satisfies VisibilityType,
+    });
+
+    await replaceMessagesByChatId({
+      chatId: intakeChatId,
+      messages: toDbMessages({
+        chatId: intakeChatId,
+        messages: legacyIntakeMessages,
+      }),
+    });
+  }
+
+  let consultChatId = patient.consultChatId;
+  if (!consultChatId) {
+    consultChatId = generateUUID();
+    await saveChat({
+      id: consultChatId,
+      userId: patient.userId,
+      title: buildPatientChatTitle(patient.name, "consult"),
+      visibility: "private" satisfies VisibilityType,
+    });
+
+    await replaceMessagesByChatId({
+      chatId: consultChatId,
+      messages: toDbMessages({
+        chatId: consultChatId,
+        messages: legacyConsultMessages,
+      }),
+    });
+  }
+
+  const shouldClearLegacyColumns =
+    patient.intakeMessages !== "[]" || patient.consultMessages !== "[]";
+
+  if (
+    !patient.intakeChatId ||
+    !patient.consultChatId ||
+    shouldClearLegacyColumns
+  ) {
+    const updatedPatient = await updatePatientById({
+      id: patient.id,
+      userId: patient.userId,
+      updates: {
+        intakeChatId,
+        consultChatId,
+        ...(shouldClearLegacyColumns
+          ? { intakeMessages: "[]", consultMessages: "[]" }
+          : {}),
+      },
+    });
+
+    if (updatedPatient) {
+      nextPatient = updatedPatient;
+    }
+  }
+
+  return nextPatient;
+}
+
 export function hydratePatient(patient: DbPatient): PatientRecord {
   return {
     id: patient.id,
@@ -51,8 +190,8 @@ export function hydratePatient(patient: DbPatient): PatientRecord {
     setupComplete: patient.setupComplete,
     profile: safeParse<PatientProfile>(patient.profile, emptyPatientProfile()),
     currentGraph: safeParseGraph(patient.currentGraph),
-    intakeMessages: safeParse<ChatMessage[]>(patient.intakeMessages, []),
-    consultMessages: safeParse<ChatMessage[]>(patient.consultMessages, []),
+    intakeMessages: [],
+    consultMessages: [],
     createdAt: patient.createdAt.toISOString(),
     updatedAt: patient.updatedAt.toISOString(),
   };
@@ -60,12 +199,20 @@ export function hydratePatient(patient: DbPatient): PatientRecord {
 
 export async function listPatients(userId: string) {
   const patients = await getPatientsByUserId({ userId });
-  return patients.map(hydratePatient);
+  return Promise.all(
+    patients.map(async (patient) =>
+      hydratePatient(await ensurePatientChats(patient))
+    )
+  );
 }
 
 export async function getHydratedPatient(id: string) {
   const patient = await getPatientById({ id });
-  return patient ? hydratePatient(patient) : null;
+  if (!patient) {
+    return null;
+  }
+
+  return hydratePatientWithMessages(await ensurePatientChats(patient));
 }
 
 export async function createPatient(userId: string, name?: string) {
@@ -74,6 +221,23 @@ export async function createPatient(userId: string, name?: string) {
     getNextPlaceholderPatientName(
       (await getPatientsByUserId({ userId })).map((patient) => patient.name)
     );
+  const intakeChatId = generateUUID();
+  const consultChatId = generateUUID();
+
+  await Promise.all([
+    saveChat({
+      id: intakeChatId,
+      userId,
+      title: buildPatientChatTitle(resolvedName, "intake"),
+      visibility: "private",
+    }),
+    saveChat({
+      id: consultChatId,
+      userId,
+      title: buildPatientChatTitle(resolvedName, "consult"),
+      visibility: "private",
+    }),
+  ]);
 
   const patient = await createPatientRow({
     userId,
@@ -82,11 +246,13 @@ export async function createPatient(userId: string, name?: string) {
     setupComplete: false,
     profile: JSON.stringify(emptyPatientProfile()),
     currentGraph: JSON.stringify(null),
-    intakeMessages: JSON.stringify(createInitialIntakeMessages()),
+    intakeChatId,
+    consultChatId,
+    intakeMessages: JSON.stringify([]),
     consultMessages: JSON.stringify([]),
   });
 
-  return hydratePatient(patient);
+  return getHydratedPatient(patient.id);
 }
 
 export async function savePatientRecord({
@@ -110,6 +276,15 @@ export async function savePatientRecord({
   intakeMessages?: ChatMessage[];
   consultMessages?: ChatMessage[];
 }) {
+  const existingPatient = await getPatientById({ id });
+
+  if (!existingPatient || existingPatient.userId !== userId) {
+    return null;
+  }
+
+  const patientWithChats = await ensurePatientChats(existingPatient);
+  const resolvedName = name ?? patientWithChats.name;
+
   const updated = await updatePatientById({
     id,
     userId,
@@ -121,16 +296,47 @@ export async function savePatientRecord({
       ...(currentGraph !== undefined
         ? { currentGraph: JSON.stringify(currentGraph) }
         : {}),
-      ...(intakeMessages !== undefined
-        ? { intakeMessages: JSON.stringify(intakeMessages) }
-        : {}),
-      ...(consultMessages !== undefined
-        ? { consultMessages: JSON.stringify(consultMessages) }
-        : {}),
     },
   });
 
-  return updated ? hydratePatient(updated) : null;
+  if (!updated) {
+    return null;
+  }
+
+  await Promise.all([
+    patientWithChats.intakeChatId && intakeMessages !== undefined
+      ? replaceMessagesByChatId({
+          chatId: patientWithChats.intakeChatId,
+          messages: toDbMessages({
+            chatId: patientWithChats.intakeChatId,
+            messages: intakeMessages,
+          }),
+        })
+      : Promise.resolve(),
+    patientWithChats.consultChatId && consultMessages !== undefined
+      ? replaceMessagesByChatId({
+          chatId: patientWithChats.consultChatId,
+          messages: toDbMessages({
+            chatId: patientWithChats.consultChatId,
+            messages: consultMessages,
+          }),
+        })
+      : Promise.resolve(),
+    name !== undefined && patientWithChats.intakeChatId
+      ? updateChatTitleById({
+          chatId: patientWithChats.intakeChatId,
+          title: buildPatientChatTitle(resolvedName, "intake"),
+        })
+      : Promise.resolve(),
+    name !== undefined && patientWithChats.consultChatId
+      ? updateChatTitleById({
+          chatId: patientWithChats.consultChatId,
+          title: buildPatientChatTitle(resolvedName, "consult"),
+        })
+      : Promise.resolve(),
+  ]);
+
+  return getHydratedPatient(updated.id);
 }
 
 const demoPatientSeeds: Array<{

@@ -47,8 +47,10 @@ const EMPTY_JSON_ARRAY = "[]";
 
 type PatientMutableFields = Pick<
   Patient,
+  | "consultChatId"
   | "consultMessages"
   | "currentGraph"
+  | "intakeChatId"
   | "intakeMessages"
   | "name"
   | "profile"
@@ -273,6 +275,29 @@ export async function saveMessages({ messages }: { messages: DBMessage[] }) {
     return await db.insert(message).values(messages);
   } catch (_error) {
     throw new ChatbotError("bad_request:database", "Failed to save messages");
+  }
+}
+
+export async function replaceMessagesByChatId({
+  chatId,
+  messages,
+}: {
+  chatId: string;
+  messages: DBMessage[];
+}) {
+  try {
+    await db.transaction(async (tx) => {
+      await tx.delete(message).where(eq(message.chatId, chatId));
+
+      if (messages.length > 0) {
+        await tx.insert(message).values(messages);
+      }
+    });
+  } catch (_error) {
+    throw new ChatbotError(
+      "bad_request:database",
+      "Failed to replace messages by chat id"
+    );
   }
 }
 
@@ -687,6 +712,8 @@ export function createPatient({
   setupComplete,
   profile,
   currentGraph,
+  intakeChatId,
+  consultChatId,
   intakeMessages,
   consultMessages,
 }: {
@@ -696,6 +723,8 @@ export function createPatient({
   setupComplete?: boolean;
   profile?: string;
   currentGraph?: string;
+  intakeChatId?: string;
+  consultChatId?: string;
   intakeMessages?: string;
   consultMessages?: string;
 }) {
@@ -710,6 +739,8 @@ export function createPatient({
         setupComplete: setupComplete ?? false,
         profile: profile ?? EMPTY_JSON_OBJECT,
         currentGraph: currentGraph ?? EMPTY_JSON_OBJECT,
+        intakeChatId,
+        consultChatId,
         intakeMessages: intakeMessages ?? EMPTY_JSON_ARRAY,
         consultMessages: consultMessages ?? EMPTY_JSON_ARRAY,
         createdAt: timestamp,

@@ -61,9 +61,13 @@ function PureMessages({
     }
   }, [chatId, reset]);
 
+  const visibleMessages = messages.filter(
+    (message) => message.role !== "system"
+  );
+
   return (
     <div className="relative flex-1 bg-background">
-      {messages.length === 0 && !isLoading && (
+      {visibleMessages.length === 0 && !isLoading && status !== "submitted" && (
         <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
           {emptyState ?? <Greeting />}
         </div>
@@ -71,18 +75,20 @@ function PureMessages({
       <div
         className={cn(
           "absolute inset-0 touch-pan-y overflow-y-auto",
-          messages.length > 0 ? "bg-background" : "bg-transparent"
+          visibleMessages.length > 0 || status === "submitted"
+            ? "bg-background"
+            : "bg-transparent"
         )}
         ref={messagesContainerRef}
         style={isArtifactVisible ? { scrollbarWidth: "none" } : undefined}
       >
         <div className="mx-auto flex min-h-full min-w-0 max-w-4xl flex-col gap-5 px-2 py-6 md:gap-7 md:px-4">
-          {messages.map((message, index) => (
+          {visibleMessages.map((message, index) => (
             <PreviewMessage
               addToolApprovalResponse={addToolApprovalResponse}
               chatId={chatId}
               isLoading={
-                status === "streaming" && messages.length - 1 === index
+                status === "streaming" && visibleMessages.length - 1 === index
               }
               isReadonly={isReadonly}
               key={message.id}
@@ -90,7 +96,7 @@ function PureMessages({
               onEdit={onEditMessage}
               regenerate={regenerate}
               requiresScrollPadding={
-                hasSentMessage && index === messages.length - 1
+                hasSentMessage && index === visibleMessages.length - 1
               }
               setMessages={setMessages}
               vote={

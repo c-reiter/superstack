@@ -2,7 +2,6 @@ import {
   convertToModelMessages,
   createUIMessageStream,
   createUIMessageStreamResponse,
-  generateObject,
   stepCountIs,
   streamText,
 } from "ai";
@@ -13,32 +12,24 @@ import { allowedModelIds, DEFAULT_CHAT_MODEL } from "@/lib/ai/models";
 import { getLanguageModel } from "@/lib/ai/providers";
 import {
   intakePrompt,
-  patientProfileSchema,
-  profileUpdatePrompt,
+  type patientProfileSchema,
 } from "@/lib/ai/superstack-prompts";
 import { setPatientName } from "@/lib/ai/tools/set-patient-name";
 import { getPatientById } from "@/lib/db/queries";
 import { normalizePatientDisplayName } from "@/lib/superstack/naming";
+import { extractPatientProfileFromMessages } from "@/lib/superstack/profile-extraction";
 import { savePatientRecord } from "@/lib/superstack/store";
 import { emptyPatientProfile } from "@/lib/superstack/types";
 import type { ChatMessage } from "@/lib/types";
+import { generateUUID } from "@/lib/utils";
 
 const requestSchema = z.object({
   messages: z.array(z.any()),
   selectedModelId: z.string().optional(),
 });
 
-function stringifyConversation(messages: ChatMessage[]) {
-  return messages
-    .map((message) => {
-      const text = message.parts
-        .filter((part) => part.type === "text")
-        .map((part) => part.text)
-        .join("\n");
-
-      return `${message.role.toUpperCase()}: ${text}`;
-    })
-    .join("\n\n");
+function stripSystemMessages(messages: ChatMessage[]) {
+  return messages.filter((message) => message.role !== "system");
 }
 
 function summarizeProfile(profile: z.infer<typeof patientProfileSchema>) {
@@ -98,6 +89,7 @@ export async function POST(
   const modelMessages = await convertToModelMessages(sanitizedMessages);
 
   const stream = createUIMessageStream({
+    generateId: generateUUID,
     execute: ({ writer }) => {
       const result = streamText({
         model: getLanguageModel(modelId),
@@ -116,25 +108,21 @@ export async function POST(
       writer.merge(result.toUIMessageStream());
     },
     onFinish: async ({ messages: assistantMessages }) => {
-      const fullMessages = [
+      const fullMessages = stripSystemMessages([
         ...uiMessages,
         ...(assistantMessages as ChatMessage[]),
-      ];
-      const fullMessagesForProfile = [
-        ...sanitizedMessages,
-        ...(assistantMessages as ChatMessage[]),
-      ];
+      ]);
+      let updatedProfile = profile;
 
-      const profileResult = await generateObject({
-        model: getLanguageModel(modelId),
-        schema: patientProfileSchema,
-        prompt: profileUpdatePrompt({
+      try {
+        updatedProfile = await extractPatientProfileFromMessages({
           existingProfile: profile,
-          messages: stringifyConversation(fullMessagesForProfile),
-        }),
-      });
-
-      const updatedProfile = profileResult.object;
+          messages: fullMessages,
+          modelId,
+        });
+      } catch (error) {
+        console.error("Failed to update patient profile from intake:", error);
+      }
       const latestPatient = await getPatientById({ id });
       const latestProfile = latestPatient?.profile
         ? { ...emptyPatientProfile(), ...JSON.parse(latestPatient.profile) }

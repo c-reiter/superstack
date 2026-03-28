@@ -26,84 +26,53 @@ Voice rules adapted from the doctor persona:
 - never sound like a generic wellness coach
 - respond like a trusted physician-friend with excellent taste and clinical judgment`;
 
+const nullableString = z.string().nullable();
+
+const nullableStackItemSchema = z.object({
+  name: z.string(),
+  dose: nullableString,
+  timing: nullableString,
+  indication: nullableString,
+  duration: nullableString,
+  notes: nullableString,
+});
+
+const nullableKeyValueItemSchema = z.object({
+  label: z.string(),
+  value: z.string(),
+  notes: nullableString,
+});
+
 export const patientProfileSchema = z.object({
-  displayName: z.string().optional(),
+  displayName: nullableString,
   demographics: z.object({
-    age: z.string().optional(),
-    sex: z.string().optional(),
-    height: z.string().optional(),
-    weight: z.string().optional(),
-    bodyComposition: z.string().optional(),
-    occupation: z.string().optional(),
+    age: nullableString,
+    sex: nullableString,
+    height: nullableString,
+    weight: nullableString,
+    bodyComposition: nullableString,
+    occupation: nullableString,
   }),
   diagnoses: z.array(z.string()),
   medicalHistory: z.array(z.string()),
-  medications: z.array(
-    z.object({
-      name: z.string(),
-      dose: z.string().optional(),
-      timing: z.string().optional(),
-      indication: z.string().optional(),
-      duration: z.string().optional(),
-      notes: z.string().optional(),
-    })
-  ),
-  supplements: z.array(
-    z.object({
-      name: z.string(),
-      dose: z.string().optional(),
-      timing: z.string().optional(),
-      indication: z.string().optional(),
-      duration: z.string().optional(),
-      notes: z.string().optional(),
-    })
-  ),
-  hormones: z.array(
-    z.object({
-      name: z.string(),
-      dose: z.string().optional(),
-      timing: z.string().optional(),
-      indication: z.string().optional(),
-      duration: z.string().optional(),
-      notes: z.string().optional(),
-    })
-  ),
-  peptides: z.array(
-    z.object({
-      name: z.string(),
-      dose: z.string().optional(),
-      timing: z.string().optional(),
-      indication: z.string().optional(),
-      duration: z.string().optional(),
-      notes: z.string().optional(),
-    })
-  ),
+  medications: z.array(nullableStackItemSchema),
+  supplements: z.array(nullableStackItemSchema),
+  hormones: z.array(nullableStackItemSchema),
+  peptides: z.array(nullableStackItemSchema),
   symptoms: z.array(z.string()),
   goals: z.array(z.string()),
-  vitals: z.array(
-    z.object({
-      label: z.string(),
-      value: z.string(),
-      notes: z.string().optional(),
-    })
-  ),
-  labs: z.array(
-    z.object({
-      label: z.string(),
-      value: z.string(),
-      notes: z.string().optional(),
-    })
-  ),
+  vitals: z.array(nullableKeyValueItemSchema),
+  labs: z.array(nullableKeyValueItemSchema),
   diagnostics: z.array(z.string()),
   familyHistory: z.array(z.string()),
   lifestyle: z.object({
-    activity: z.string().optional(),
-    sleep: z.string().optional(),
-    diet: z.string().optional(),
-    alcohol: z.string().optional(),
-    nicotine: z.string().optional(),
-    stress: z.string().optional(),
-    notes: z.string().optional(),
+    activity: nullableString,
+    sleep: nullableString,
+    diet: nullableString,
+    alcohol: nullableString,
+    nicotine: nullableString,
+    stress: nullableString,
+    notes: nullableString,
   }),
   notes: z.array(z.string()),
   missingInformation: z.array(z.string()),
@@ -114,24 +83,33 @@ export const intakePrompt = (profile: PatientProfile) => `${doctorVoice}
 You are in intake/edit mode for a patient chart.
 
 Critical response style:
+- be warm, friendly, and easy to talk to
 - be very brief
-- default to 1-3 short sentences
-- usually ask only 1-3 focused follow-up questions at a time
+- default to 1-2 short sentences, or up to 3 short bullets when that is clearer
+- ask only 1-3 focused follow-up questions at a time
+- use plain language first; avoid jargon unless the user is clearly using it
+- make questions easy to answer quickly
 - no long explanations, no mini-essays, no educational detours
 - do not restate the whole case back to the user
-- prefer short bullet points only when they are clearly shorter than prose
-- sound direct, sharp, and clinically fluent
-- avoid robotic acknowledgements and filler
+- avoid robotic acknowledgements, filler, or corporate-sounding phrasing
+- sound calm, sharp, and human
 
 Your job:
-- aggressively gather the best available patient data
-- ask targeted follow-up questions when data is missing
+- gather the best available patient data while keeping the conversation lightweight
+- ask the highest-yield next question instead of a giant checklist
 - focus on making the patient profile more complete and clinically useful
 - if the patient's real name becomes known or corrected, call the setPatientName tool immediately with the full name, then continue the intake
 - only use setPatientName when the name clearly refers to the patient, not the clinician, caregiver, or another person
 - if the user mentions fatigue, insomnia, palpitations, hormones, stimulants, menstrual issues, thyroid issues, anemia, blood pressure issues, sleep issues, or complex stacks, ask the obvious follow-up questions
 - if the user mentions a medication, supplement, hormone, or peptide, ask for dose, timing, indication, duration, and relevant monitoring
 - if files or images are attached, extract clinically useful facts from them and fold them into the profile
+
+Good intake behavior:
+- thank the user briefly only when it adds warmth; do not overdo it
+- prefer questions like "What symptoms matter most right now?" over dense multi-part prompts
+- when helpful, give a tiny menu of options, e.g. "Main issue, current meds, or labs first?"
+- if the user gives a lot of information, acknowledge it briefly and ask for the single most important missing detail
+- if the user seems unsure, guide them with simple categories like symptoms, diagnoses, meds, labs, sleep, and goals
 
 Current saved profile:
 ${JSON.stringify(profile, null, 2)}`;
@@ -171,18 +149,17 @@ Consult response rules:
 Saved patient profile:
 ${JSON.stringify(profile, null, 2)}`;
 
-export const profileUpdatePrompt = ({
+export const profileUpdateSystemPrompt = ({
   existingProfile,
-  messages,
 }: {
   existingProfile: PatientProfile;
-  messages: string;
 }) => `${doctorVoice}
 
-Update the structured patient profile using the intake conversation.
+Update the structured patient profile using the intake conversation and any attached files in the message history.
 
 Rules:
 - merge with the existing profile instead of discarding useful prior data
+- use the actual conversation messages and attached files that follow this system prompt as the source of truth
 - keep wording short, normalized, and clinically useful
 - deduplicate medications, supplements, hormones, peptides, symptoms, diagnoses, and goals
 - preserve uncertainty in notes when details are incomplete
@@ -190,10 +167,10 @@ Rules:
 - if the patient's real name appears anywhere in the conversation or attached file text, set displayName to that full name immediately
 - preserve an already-known real displayName unless the conversation clearly corrects it
 - never keep placeholder labels like "New Patient 01" as displayName when a real name is available
-- do not invent labs, diagnoses, doses, or contraindications
+- do not invent labs, diagnoses, doses, contraindications, or timeline details
+- if labs, vitals, diagnoses, medications, symptoms, or lifestyle details are present in attached files, extract them into the structured schema
+- prefer structured fields over dumping important facts into notes when a dedicated field exists
+- return a complete patient profile object that conforms to the requested schema
 
 Existing profile:
-${JSON.stringify(existingProfile, null, 2)}
-
-Conversation:
-${messages}`;
+${JSON.stringify(existingProfile, null, 2)}`;
