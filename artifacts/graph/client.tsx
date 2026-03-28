@@ -486,14 +486,64 @@ export function GraphCanvas({ graph }: { graph: PatientGraph }) {
     const previousHtmlOverscrollBehaviorX = html.style.overscrollBehaviorX;
     const previousBodyOverscrollBehaviorX = body.style.overscrollBehaviorX;
 
+    const preventMacNavigationGesture = (event: Event) => {
+      const viewport = viewportRef.current;
+      if (!viewport) {
+        return;
+      }
+
+      const target = event.target;
+      if (target instanceof Node && !viewport.contains(target)) {
+        return;
+      }
+
+      if (event.cancelable) {
+        event.preventDefault();
+      }
+    };
+
     html.style.overscrollBehaviorX = "none";
     body.style.overscrollBehaviorX = "none";
+
+    window.addEventListener("wheel", preventMacNavigationGesture, {
+      capture: true,
+      passive: false,
+    });
+    window.addEventListener("gesturestart", preventMacNavigationGesture, {
+      capture: true,
+      passive: false,
+    });
+    window.addEventListener("gesturechange", preventMacNavigationGesture, {
+      capture: true,
+      passive: false,
+    });
+    window.addEventListener("gestureend", preventMacNavigationGesture, {
+      capture: true,
+      passive: false,
+    });
 
     return () => {
       html.style.overscrollBehaviorX = previousHtmlOverscrollBehaviorX;
       body.style.overscrollBehaviorX = previousBodyOverscrollBehaviorX;
+
+      window.removeEventListener("wheel", preventMacNavigationGesture, true);
+      window.removeEventListener(
+        "gesturestart",
+        preventMacNavigationGesture,
+        true
+      );
+      window.removeEventListener(
+        "gesturechange",
+        preventMacNavigationGesture,
+        true
+      );
+      window.removeEventListener(
+        "gestureend",
+        preventMacNavigationGesture,
+        true
+      );
     };
-  }, [isViewportHovered]);
+  }, [isViewportHovered, viewportRef]);
 
   useEffect(() => {
     const element = viewportRef.current;
