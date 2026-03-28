@@ -91,6 +91,14 @@ type Point = {
   y: number;
 };
 
+type HoveredEdge = {
+  id: string;
+  label: string;
+  explanation: string;
+  x: number;
+  y: number;
+};
+
 const GRAPH_PADDING = 240;
 const MIN_ZOOM = 0.8;
 const MAX_ZOOM = 3.5;
@@ -745,7 +753,7 @@ function getNodeAttachmentPoint(
   };
 }
 
-function buildEdgePath(source: PositionedNode, target: PositionedNode) {
+function buildEdgeGeometry(source: PositionedNode, target: PositionedNode) {
   const start = getNodeAttachmentPoint(source, target);
   const end = getNodeAttachmentPoint(target, source);
   const dx = end.x - start.x;
@@ -753,13 +761,29 @@ function buildEdgePath(source: PositionedNode, target: PositionedNode) {
 
   if (Math.abs(dx) >= Math.abs(dy)) {
     const handle = Math.max(Math.abs(dx) * 0.35, 40) * Math.sign(dx || 1);
+    const control1 = { x: start.x + handle, y: start.y };
+    const control2 = { x: end.x - handle, y: end.y };
 
-    return `M ${start.x} ${start.y} C ${start.x + handle} ${start.y}, ${end.x - handle} ${end.y}, ${end.x} ${end.y}`;
+    return {
+      path: `M ${start.x} ${start.y} C ${control1.x} ${control1.y}, ${control2.x} ${control2.y}, ${end.x} ${end.y}`,
+      midpoint: {
+        x: (start.x + 3 * control1.x + 3 * control2.x + end.x) / 8,
+        y: (start.y + 3 * control1.y + 3 * control2.y + end.y) / 8,
+      },
+    };
   }
 
   const handle = Math.max(Math.abs(dy) * 0.35, 40) * Math.sign(dy || 1);
+  const control1 = { x: start.x, y: start.y + handle };
+  const control2 = { x: end.x, y: end.y - handle };
 
-  return `M ${start.x} ${start.y} C ${start.x} ${start.y + handle}, ${end.x} ${end.y - handle}, ${end.x} ${end.y}`;
+  return {
+    path: `M ${start.x} ${start.y} C ${control1.x} ${control1.y}, ${control2.x} ${control2.y}, ${end.x} ${end.y}`,
+    midpoint: {
+      x: (start.x + 3 * control1.x + 3 * control2.x + end.x) / 8,
+      y: (start.y + 3 * control1.y + 3 * control2.y + end.y) / 8,
+    },
+  };
 }
 
 export function GraphCanvas({ graph }: { graph: PatientGraph }) {
@@ -774,6 +798,7 @@ export function GraphCanvas({ graph }: { graph: PatientGraph }) {
   const { ref: viewportRef, size } = useElementSize<HTMLDivElement>();
   const [zoom, setZoom] = useState(1);
   const [isViewportHovered, setIsViewportHovered] = useState(false);
+  const [hoveredEdge, setHoveredEdge] = useState<HoveredEdge | null>(null);
   const zoomRef = useRef(1);
   const pendingScrollRef = useRef<ViewportScroll | null>(null);
   const hasCenteredRef = useRef(false);
@@ -838,6 +863,7 @@ export function GraphCanvas({ graph }: { graph: PatientGraph }) {
     setZoom(1);
     hasCenteredRef.current = false;
     pendingScrollRef.current = null;
+    setHoveredEdge(null);
   }, [graphVersion]);
 
   useLayoutEffect(() => {
@@ -1244,23 +1270,61 @@ export function GraphCanvas({ graph }: { graph: PatientGraph }) {
                     return null;
                   }
 
-                  const curve = buildEdgePath(source, target);
+                  const geometry = buildEdgeGeometry(source, target);
+                  const isHovered = hoveredEdge?.id === edge.id;
 
                   return (
-                    <path
-                      className={EDGE_STYLES[edge.severity]}
-                      d={curve}
-                      fill="none"
-                      key={edge.id}
-                      opacity="0.82"
-                      strokeLinecap="round"
-                      strokeWidth="2.5"
-                    >
-                      <title>{`${edge.label}: ${edge.explanation}`}</title>
-                    </path>
+                    <g key={edge.id}>
+                      <path
+                        className={EDGE_STYLES[edge.severity]}
+                        d={geometry.path}
+                        fill="none"
+                        opacity={isHovered ? "0.98" : "0.82"}
+                        strokeLinecap="round"
+                        strokeWidth={isHovered ? "3.5" : "2.5"}
+                      />
+                      <path
+                        d={geometry.path}
+                        fill="none"
+                        onPointerEnter={() => {
+                          setHoveredEdge({
+                            id: edge.id,
+                            label: edge.label,
+                            explanation: edge.explanation,
+                            x: geometry.midpoint.x,
+                            y: geometry.midpoint.y,
+                          });
+                        }}
+                        onPointerLeave={() => {
+                          setHoveredEdge((current) =>
+                            current?.id === edge.id ? null : current
+                          );
+                        }}
+                        stroke="transparent"
+                        strokeLinecap="round"
+                        strokeWidth="16"
+                      />
+                    </g>
                   );
                 })}
               </svg>
+
+              {hoveredEdge ? (
+                <div
+                  className="pointer-events-none absolute z-20 w-56 -translate-x-1/2 -translate-y-[calc(100%+12px)] rounded-xl border border-border/70 bg-background/96 px-3 py-2 shadow-lg"
+                  style={{
+                    left: hoveredEdge.x,
+                    top: hoveredEdge.y,
+                  }}
+                >
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                    {hoveredEdge.label}
+                  </div>
+                  <div className="mt-1 text-xs leading-relaxed text-foreground">
+                    {hoveredEdge.explanation}
+                  </div>
+                </div>
+              ) : null}
 
               {positionedNodes.map((node) => (
                 <div
